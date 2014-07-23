@@ -81,3 +81,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.6/howto/static-files/
 
 STATIC_URL = '/static/'
+
+
+# Message queue settings
+
+ZMQ_PUBLISHER_SOCKET = 'tcp://*:5555'
+
+ZMQ_IPC_SOCKET = 'ipc:///tmp/zmq'
+
+ZMQ_IPC_REQUEST_TIMEOUT = 1000

@@ -2,8 +2,10 @@ import zmq
 import django.db
 import django.db.models.signals
 import django.dispatch
+import core.lib.zeromq
 
 from django.db import models
+from django.conf import settings
 
 class WeatherModel(models.Model):
     id = models.CharField(primary_key=True, max_length=255)
@@ -45,27 +47,6 @@ class WeatherModelStatus(models.Model):
 # Push weather model status updates to ZMQ
 #
 def wms_zmq_pusher(sender, **kwargs):
-    def worker():
-        instance = kwargs['instance']
-        context = zmq.Context(1)
-        print instance.get_status_display()
-
-        sock = context.socket(zmq.REQ)
-        sock.connect('ipc:///tmp/zmq')
-
-        poll = zmq.Poller()
-        poll.register(sock, zmq.POLLIN)
-
-        sock.send_string(unicode(instance.id))
-        socks = dict(poll.poll(1000))
-        if socks.get(sock) == zmq.POLLIN:
-            reply = sock.recv_string()
-            print reply
-            assert reply == 'OK'
-
-        sock.close()
-        context.term()
-
-    django.db.connection.on_commit(worker)
+    django.db.connection.on_commit(lambda: core.lib.zeromq.send_ipc_message(kwargs['instance'].id))
 
 django.db.models.signals.post_save.connect(wms_zmq_pusher, sender=WeatherModelStatus, dispatch_uid='wms_zmq_pusher')
