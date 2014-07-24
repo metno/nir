@@ -1,3 +1,10 @@
+"""
+This module is the part of YBS-broker that runs on routine servers.
+
+See the documentation for the different classes.
+"""
+
+import argparse
 import sqlite3
 import json
 import zmq
@@ -9,6 +16,8 @@ REPLY_NAK = u'NAK'
 REPLY_OK = u'OK'
 
 class Database(object):
+    """Interface to SQLite3."""
+
     def __init__(self):
         self.conn = sqlite3.connect(DATABASE_FILENAME)
         self.conn.row_factory = sqlite3.Row
@@ -58,7 +67,9 @@ class Database(object):
         self.cursor.execute('''DELETE FROM "modeldata" WHERE "id" = ?''', (id,))
         self.conn.commit()
 
+
 class Broker(object):
+    """The Broker class listens for client connections, and accepts data sets."""
     def __init__(self):
         self.context = zmq.Context()
         self.socket = self.context.socket(zmq.REP)
@@ -87,7 +98,13 @@ class Broker(object):
         data = json.loads(s)
         return data
 
-class App(object):
+
+class Server(object):
+    """The Server class mediates between the Database and Broker class. It
+    ensures that data sets accepted through Broker are committed to Database,
+    sent out to the REST service, and deleted when they are submitted.
+    """
+
     def __init__(self):
         self.db = Database()
         self.broker = Broker()
@@ -121,6 +138,66 @@ class App(object):
             self.post_all_queued()
             self.recv()
 
+
+class Client(object):
+    """The Client class submits datasets to an already running server instance."""
+    def __init__(self):
+        self.context = zmq.Context()
+        self.socket = self.context.socket(zmq.REQ)
+        self.socket.connect(ZMQ_SOCKET)
+
+    def _send_data(self, data):
+        s = json.dumps(data)
+        self.socket.send_string(s)
+
+    def _tokenize(self, s):
+        return [x.strip() for x in s.split()]
+
+    def _recv_status(self):
+        return self.socket.recv_string()
+
+    def post_data(self, data):
+        self._send_data(data)
+        reply = self._recv_status()
+        tokens = self._tokenize(reply)
+        if len(tokens) == 0:
+            raise Exception("Got empty reply from server")
+        if tokens[0] == REPLY_OK:
+            return
+        elif tokens[0] == REPLY_NAK:
+            if len(tokens) == 1:
+                raise Exception("Got NAK from server, but no error message")
+            raise Exception(reply[len(tokens[0])+1:])
+        raise Exception("Unexpected reply from server: %s", reply)
+
+
 if __name__ == '__main__':
-    app = App()
-    app.main()
+    def server(args):
+        app = Server()
+        app.main()
+
+    def client(args):
+        app = Client()
+        data = {
+            "model": args.model,
+            "date": args.date,
+            "term": args.term,
+            "files": [{ "uri": x } for x in args.files]
+        }
+        app.post_data(data)
+
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers()
+
+    parser_server = subparsers.add_parser('server', help='start the server')
+    parser_server.set_defaults(func=server)
+
+    parser_client = subparsers.add_parser('client', help='send dataset to server')
+    parser_client.add_argument('--model', type=unicode, help='model name, e.g. arome_metcoop_2500')
+    parser_client.add_argument('--date', type=unicode, help='model run date in YYYY-MM-DD format')
+    parser_client.add_argument('--term', type=int, help='model run term')
+    parser_client.add_argument('files', metavar='uri', type=unicode, nargs='+', help='URI of files in this dataset')
+    parser_client.set_defaults(func=client)
+
+    args = parser.parse_args()
+    args.func(args)
