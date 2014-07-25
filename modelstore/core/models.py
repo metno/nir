@@ -47,6 +47,9 @@ class File(models.Model):
     class Meta:
         unique_together = ('dataset', 'uri')
 
+    def __unicode__(self):
+        return self.uri
+
 
 #
 # Push weather model status updates to ZMQ

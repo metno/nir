@@ -1,4 +1,6 @@
 import tastypie.validation
+import tastypie.exceptions
+import tastypie.http
 import datetime
 import re
 import core.models
@@ -8,15 +10,19 @@ URI_REGEX = "[A-Za-z][A-Za-z0-9\+\.\-]*:([A-Za-z0-9\.\-_~:/\?#\[\]@!\$&'\(\)\*\+
 
 
 class BaseValidation(tastypie.validation.Validation):
-    def _required_parameters(self, bundle, keys):
+    def _optional_parameters(self, bundle, keys):
         errors = []
+        for key in keys:
+            if key in bundle.data:
+                if isinstance(bundle.data[key], str) and len(bundle.data[key]) == 0:
+                    errors.append("Parameter '%s' can't be empty" % key)
+        return errors
+
+    def _required_parameters(self, bundle, keys):
+        errors = self._optional_parameters(bundle, keys)
         for key in keys:
             if not key in bundle.data:
                 errors.append("Missing required parameter '%s'" % key)
-                continue
-            if isinstance(bundle.data[key], str) and len(bundle.data[key]) == 0:
-                errors.append("Parameter '%s' can't be empty" % key)
-                continue
         return errors
 
 
@@ -66,13 +72,20 @@ class DatasetValidation(BaseValidation):
         if not bundle.data:
             return HAL_ERROR
 
-        errors = self._required_parameters(bundle, ['date', 'term', 'status'])
+        params = ['date', 'term', 'status']
+        if bundle.obj.id:
+            errors = self._optional_parameters(bundle, params)
+        else:
+            errors = self._required_parameters(bundle, params)
         if errors:
             return errors
 
-        errors += self._validate_term(bundle.data['term'])
-        errors += self._validate_date(bundle.data['date'])
-        errors += self._validate_status(bundle.data['status'])
+        if 'term' in bundle.data:
+            errors += self._validate_term(bundle.data['term'])
+        if 'date' in bundle.data:
+            errors += self._validate_date(bundle.data['date'])
+        if 'status' in bundle.data:
+            errors += self._validate_status(bundle.data['status'])
 
         return errors
 

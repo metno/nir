@@ -6,6 +6,7 @@ Run python routine.py --help for program description and usage.
 
 import datetime
 import argparse
+import requests
 import logging
 import sqlite3
 import json
@@ -14,6 +15,10 @@ import re
 
 DATABASE_FILENAME = '/tmp/dataqueue.db'
 ZMQ_SOCKET = 'ipc:///tmp/dataqueue.zmq'
+REST_API_URI_BASE = 'http://localhost:8000'
+REST_API_URI_MODEL = '/api/v1/model/'
+REST_API_URI_DATASET = '/api/v1/dataset/'
+REST_API_URI_FILE = '/api/v1/file/'
 
 REPLY_NAK = u'NAK'
 REPLY_OK = u'OK'
@@ -27,6 +32,12 @@ class InvalidDatasetException(Exception):
 
 class ClientException(Exception):
     pass
+
+
+class RESTException(Exception):
+    def __init__(self, message, request):
+        self.request = request
+        super(Exception, self).__init__(message)
 
 
 class Database(object):
@@ -67,8 +78,8 @@ class Database(object):
             self.cursor.execute('''INSERT INTO "filelist" VALUES (NULL, ?, ?)''', (id, f['uri'],))
         self.conn.commit()
 
-    def get(self):
-        self.cursor.execute('''SELECT * FROM "modeldata" ORDER BY "id" ASC LIMIT 1''')
+    def get(self, min_id):
+        self.cursor.execute('''SELECT * FROM "modeldata" WHERE "id" > ? ORDER BY "id" ASC LIMIT 1''', (min_id,))
         data = self.cursor.fetchone()
         if not data:
             return
@@ -146,19 +157,62 @@ class Server(object):
         self.broker = Broker()
 
     def post_dataset(self, data):
-        logging.error("NOT IMPLEMENTED: post_dataset()")
+        def _validate_request_location(req, code):
+            if req.status_code != code:
+                raise RESTException('POST %s returned status %d, expected %d' % (req.url, req.status_code, code), req)
+            return req.headers['location']
+
+        def _do_post(uri, payload):
+            req = requests.post(uri, data=json.dumps(payload), headers={'content-type': 'application/json'})
+            return _validate_request_location(req, 201)
+
+        def _do_put(uri, payload):
+            req = requests.put(uri, data=json.dumps(payload), headers={'content-type': 'application/json'})
+            return _validate_request_location(req, 204)
+
+        def _post_dataset(data):
+            payload = {
+                    "model": REST_API_URI_MODEL + data['model'] + '/',
+                    "date": data['date'],
+                    "term": data['term'],
+                    "status": 0,
+                    "completed_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+            return _do_post(REST_API_URI_BASE + REST_API_URI_DATASET, payload)
+
+        def _complete_dataset(uri):
+            payload = {
+                    "status": 1
+            }
+            _do_put(uri, payload)
+
+        def _post_files(location, files):
+            for f in files:
+                payload = {
+                        "dataset": location,
+                        "uri": f['uri'],
+                }
+                _do_post(REST_API_URI_BASE + REST_API_URI_FILE, payload)
+
+        dataset_location = _post_dataset(data)
+        _post_files(dataset_location, data['files'])
+        _complete_dataset(dataset_location)
 
     def post_all_queued(self):
+        min_id = 0
         while True:
-            data = self.db.get()
+            data = self.db.get(min_id)
             if not data:
                 return
             try:
                 logging.info("Posting dataset: %s" % json.dumps(data))
                 self.post_dataset(data)
                 logging.info("Dataset successfully posted")
-            except Exception, e:
+            except RESTException, e:
                 logging.error("Error posting dataset: %s" % unicode(e))
+                logging.debug("Reply from server: %s" % e.request.content)
+                logging.warning("Skipping this dataset until next run")
+                min_id = data['id']
             else:
                 self.db.delete(data['id'])
                 logging.info("Dataset deleted from queue")
