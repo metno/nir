@@ -22,10 +22,10 @@ class Broker(object):
         self.sock_ipc.bind(django.conf.settings.ZMQ_IPC_SOCKET)
         self.log('Broker started, ready to accept connections')
 
-    def get_status_object(self, pk):
-        qs = core.models.WeatherModelStatus.objects.filter(pk=pk)
+    def get_dataset(self, pk):
+        qs = core.models.Dataset.objects.filter(pk=pk)
         if qs.count() != 1:
-            raise InvalidMessageException('can not find WeatherModelStatus object with pk %d' % pk)
+            raise InvalidMessageException('can not find Dataset object with pk %d' % pk)
         return qs[0]
 
     def get_valid_message_pk(self, msg):
@@ -35,15 +35,16 @@ class Broker(object):
             raise InvalidMessageException('not an integer')
         return pk
 
-    def publish(self, status):
-        dataset = {
-                'model': status.weathermodelrun.weathermodel.id,
-                'date': status.weathermodelrun.date.strftime('%Y-%m-%d'),
-                'term': status.weathermodelrun.term,
-                'status': status.status,
-                'datetime': unicode(status.datetime)
+    def publish(self, dataset):
+        s = {
+                'model': dataset.model.id,
+                'date': dataset.date.strftime('%Y-%m-%d'),
+                'term': dataset.term,
+                'status': dataset.status,
+                'created_at': unicode(dataset.created_at),
+                'completed_at': unicode(dataset.completed_at),
         }
-        msg = json.dumps(dataset)
+        msg = json.dumps(s)
         self.sock_pub.send_string(msg)
         self.log('Published message: %s' % msg)
 
@@ -54,13 +55,13 @@ class Broker(object):
 
             try:
                 pk = self.get_valid_message_pk(msg)
-                status = self.get_status_object(pk)
+                dataset = self.get_dataset(pk)
             except InvalidMessageException, e:
                 self.log('Error processing message: %s' % unicode(e))
                 self.sock_ipc.send_string(IPC_REPLY_NAK)
                 continue
 
-            self.publish(status)
+            self.publish(dataset)
 
             self.sock_ipc.send_string(IPC_REPLY_OK)
 
