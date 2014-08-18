@@ -36,6 +36,7 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'haystack',
     'modelstore.core',
     'tastypie',
 )
@@ -62,6 +63,16 @@ DATABASES = {
         'ENGINE': 'transaction_hooks.backends.sqlite3',
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
+}
+
+# Haystack
+# http://django-haystack.readthedocs.org/en/v2.2.0/
+HAYSTACK_CONNECTIONS = {
+    'default': {
+        'ENGINE': 'haystack.backends.whoosh_backend.WhooshEngine',
+        'PATH': os.path.join(BASE_DIR, 'whoosh'),
+        'STORAGE': 'file',
+    },
 }
 
 # Internationalization
