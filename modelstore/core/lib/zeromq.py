@@ -37,10 +37,12 @@ class Broker(object):
 
     def publish(self, dataset):
         s = {
+                'id': dataset.id,
                 'model': dataset.model.id,
                 'date': dataset.date.strftime('%Y-%m-%d'),
                 'term': dataset.term,
                 'status': dataset.status,
+                'files': [f.uri for f in dataset.files.all()],
                 'created_at': unicode(dataset.created_at),
                 'completed_at': unicode(dataset.completed_at),
         }

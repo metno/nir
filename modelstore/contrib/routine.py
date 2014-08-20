@@ -1,3 +1,4 @@
+#!/usr/bin/env python2
 """
 routine.py: part of YBS-broker that runs on routine servers.
 
@@ -211,6 +212,10 @@ class Server(object):
             except RESTException, e:
                 logging.error("Error posting dataset: %s" % unicode(e))
                 logging.debug("Reply from server: %s" % e.request.content)
+                logging.warning("Skipping this dataset until next run")
+                min_id = data['id']
+            except requests.ConnectionError, e:
+                logging.error("Error posting dataset: %s" % unicode(e))
                 logging.warning("Skipping this dataset until next run")
                 min_id = data['id']
             else:
