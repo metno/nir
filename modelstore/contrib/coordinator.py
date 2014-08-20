@@ -113,14 +113,11 @@ class Server:
                 if sock == self.wdb_subscriber:
                     logging.debug("Received message from WDB: %s" % message)
                     self.process_wdb(message)
-                    self.broadcast_state()
-                    self.reconfigure()
                 else:
                     for sibling in self.siblings.itervalues():
                         if sock == sibling.socket:
                             logging.debug("Received message from sibling '%s': %s" % (sibling.host, message))
                             self.process_sibling(sibling, message)
-            #self.broadcast_state()
 
     @property
     def me(self):
@@ -128,8 +125,12 @@ class Server:
 
     def catch_up(self):
         logging.info("Asking siblings for their current dataset")
-        self.broadcast_state()
         self.publisher.send_string(CMD_STATUS)
+
+    def broadcast_model(self, model):
+        datasets_str = "%s %s %s" % (CMD_DATASETS, model, ' '.join([str(x['id']) for x in self.me.datasets[model]]))
+        self.publisher.send_string(datasets_str.strip())
+        logging.debug(datasets_str)
 
     def broadcast_state(self):
         logging.info("Broadcasting my dataset status")
@@ -137,14 +138,13 @@ class Server:
         #self.publisher.send_string(dataset_str.strip())
         #logging.debug(dataset_str)
         for model in self.config.MODELS:
-            datasets_str = "%s %s %s" % (CMD_DATASETS, model, ' '.join([str(x['id']) for x in self.me.datasets[model]]))
-            self.publisher.send_string(datasets_str.strip())
-            logging.debug(datasets_str)
+            self.broadcast_model(model)
 
     def process_wdb(self, message):
         dataset = self.rest.get_dataset_by_id(int(message))
         if self.me.add_dataset(dataset):
             logging.info("Added dataset %d to list of available datasets." % dataset['id'])
+            self.broadcast_model(dataset['model']['id'])
 
     def process_sibling(self, sibling, message):
         tokens = message.split(" ")
@@ -162,7 +162,7 @@ class Server:
                 sets += [dataset]
             sibling.truncate_dataset_list(tokens[1])
             [sibling.add_dataset(dataset) for dataset in sets]
-            self.reconfigure()
+            self.reconfigure(tokens[1])
         elif tokens[0] == CMD_STATUS:
             self.broadcast_state()
 
@@ -186,13 +186,13 @@ class Server:
             current = "[current]" if self.me.dataset[model] == dataset else ""
             logging.info("  %6d: %2d hosts [%3d%%] %s" % (dataset, hosts, percent, current))
 
-    def reconfigure(self):
-        for model in self.config.MODELS:
-            if len(self.me.datasets[model]) == 0:
-                logging.warning("No datasets loaded for model %s" % model)
-                continue
+    def reconfigure(self, model):
+        sortedsets, pop, prospect = self.get_availability(model)
 
-            sortedsets, pop, prospect = self.get_availability(model)
+        def _internal_reconfigure():
+            if len(self.me.datasets[model]) == 0:
+                logging.warning("No locally available datasets loaded for model %s, I should be disabled!" % model)
+                return
 
             if not prospect:
                 dataset = sortedsets[0]
@@ -214,14 +214,19 @@ class Server:
             logging.info("%s: %d/%d hosts has new dataset %d, %d%% is above threshold of %d%%: loading dataset!" % (model, hosts, len(self.siblings), dataset, percent, LOAD_THRESHOLD))
             self.load_dataset_id(model, dataset)
 
-            logging.info("===== %s availability =====" % model)
-            self.print_availability(model, sortedsets, pop)
-            logging.info("===== end of availability report =====")
+        _internal_reconfigure()
+
+        if len(sortedsets) == 0:
+            logging.warning("%s has zero availability across all hosts!" % model)
+            return
+
+        logging.info("===== %s availability =====" % model)
+        self.print_availability(model, sortedsets, pop)
+        logging.info("===== end of availability report =====")
 
     def load_dataset_id(self, model, id):
         logging.info("Setting currently loaded %s dataset to %d" % (model, id))
         self.me.dataset[model] = id
-        self.broadcast_state()
 
 if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s (%(levelname)s) %(message)s', level=logging.DEBUG)
