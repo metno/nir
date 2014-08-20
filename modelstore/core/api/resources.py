@@ -76,7 +76,7 @@ class ModelResource(SearchableResource):
 class DatasetResource(SearchableResource):
     ALLOWED_QUERY_FIELDS = ['model', 'date', 'term']
 
-    model = fields.ToOneField('core.api.resources.ModelResource', 'model')
+    model = fields.ToOneField('core.api.resources.ModelResource', 'model', full=True)
     created_at = fields.DateField(attribute='created_at', readonly=True)
     files = fields.ToManyField('core.api.resources.FileResource', 'files', full=True, null=True)
 

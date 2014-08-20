@@ -33,7 +33,6 @@ if __name__ == '__main__':
                     "file": f
                     }
             logging.debug(cmd)
-            time.sleep(1)
 
         logging.info("Loading complete")
         publisher.send_string("%s" % dataset['id'])

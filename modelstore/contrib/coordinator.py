@@ -8,6 +8,7 @@ import argparse
 import operator
 import json
 import logging
+import requests
 import collections
 import itertools
 
@@ -17,6 +18,8 @@ CMD_STATUS = 'status'
 CMD_DATASET = 'dataset'
 CMD_DATASETS = 'datasets'
 
+REST_URI = 'http://localhost:8000/api/v1'
+
 # Define these in your settings file
 #SIBLINGS = []
 #WDB_HOST = 'localhost'
@@ -24,21 +27,56 @@ CMD_DATASETS = 'datasets'
 #PUB_HOST = '0.0.0.0'
 #PUB_PORT = 5557
 
+class REST:
+    def __init__(self):
+        pass
+
+    def get_dataset_by_id(self, id):
+        uri = "%s/dataset/%d/" % (REST_URI, id)
+        req = requests.get(uri, headers={'content-type': 'application/json'})
+        return json.loads(req.content)
+
 class Sibling:
     def __init__(self, config, host, port):
         self.CSTR = 'tcp://%s:%d' % (host, port)
         self.config = config
-        self.datasets = []
-        self.dataset = None
+        self.datasets = {}
+        self.dataset = {}
+        for model in self.config.MODELS:
+            self.datasets[model] = []
+            self.dataset[model] = None
         self.host = host
         self.socket = context.socket(zmq.SUB)
         self.socket.connect(self.CSTR)
         self.socket.setsockopt_string(zmq.SUBSCRIBE, u'')
 
+    def truncate_dataset_list(self, model):
+        self.datasets[model] = []
+
+    def has_dataset_id(self, id):
+        return self.get_dataset_id(id) != None
+
+    def get_dataset_id(self, id):
+        for sets in self.datasets.itervalues():
+            for dataset in sets:
+                if dataset['id'] == id:
+                    return dataset
+        return None
+
+    def add_dataset(self, dataset):
+        if self.has_dataset_id(dataset['id']):
+            return False
+        dataset['id'] = dataset['id']
+        if not dataset['model']['id'] in self.datasets:
+            self.datasets[dataset['model']['id']] = []
+        self.datasets[dataset['model']['id']] += [dataset]
+        return True
+
 class Server:
-    def __init__(self, config):
+    def __init__(self, config, rest):
         self.poller = zmq.Poller()
         self.config = config
+        self.rest = rest
 
         WDB_CSTR = 'tcp://%s:%d' % (self.config.WDB_HOST, self.config.WDB_PORT)
         self.wdb_subscriber = context.socket(zmq.SUB)
@@ -73,14 +111,14 @@ class Server:
             for sock in socks:
                 message = sock.recv_string()
                 if sock == self.wdb_subscriber:
-                    logging.info("Received message from WDB: %s" % message)
+                    logging.debug("Received message from WDB: %s" % message)
                     self.process_wdb(message)
                     self.broadcast_state()
                     self.reconfigure()
                 else:
                     for sibling in self.siblings.itervalues():
                         if sock == sibling.socket:
-                            logging.info("Received message from sibling '%s': %s" % (sibling.host, message))
+                            logging.debug("Received message from sibling '%s': %s" % (sibling.host, message))
                             self.process_sibling(sibling, message)
             #self.broadcast_state()
 
@@ -95,71 +133,94 @@ class Server:
 
     def broadcast_state(self):
         logging.info("Broadcasting my dataset status")
-        dataset_str  = "%s %s" % (CMD_DATASET, self.me.dataset if self.me.dataset else '')
-        datasets_str = "%s %s" % (CMD_DATASETS, ' '.join([str(x) for x in self.me.datasets]))
-        self.publisher.send_string(dataset_str.strip())
-        self.publisher.send_string(datasets_str.strip())
-        logging.debug(dataset_str)
-        logging.debug(datasets_str)
+        #dataset_str  = "%s %s" % (CMD_DATASET, self.me.dataset if self.me.dataset else '')
+        #self.publisher.send_string(dataset_str.strip())
+        #logging.debug(dataset_str)
+        for model in self.config.MODELS:
+            datasets_str = "%s %s %s" % (CMD_DATASETS, model, ' '.join([str(x['id']) for x in self.me.datasets[model]]))
+            self.publisher.send_string(datasets_str.strip())
+            logging.debug(datasets_str)
 
     def process_wdb(self, message):
-        self.me.datasets += [int(message)]
-        self.me.datasets = list(set(self.me.datasets))
-        logging.info("Added dataset %d to list of available datasets." % int(message))
+        dataset = self.rest.get_dataset_by_id(int(message))
+        if self.me.add_dataset(dataset):
+            logging.info("Added dataset %d to list of available datasets." % dataset['id'])
 
     def process_sibling(self, sibling, message):
         tokens = message.split(" ")
         if tokens[0] == CMD_DATASET:
-            if len(tokens) == 1:
-                sibling.dataset = None
+            if len(tokens) == 2:
+                sibling.dataset[tokens[1]] = None
             else:
-                sibling.dataset = int(tokens[1])
+                sibling.dataset[tokens[1]] = int(tokens[2])
         elif tokens[0] == CMD_DATASETS:
-            sibling.datasets = [int(x) for x in tokens[1:]]
+            sets = []
+            for id in tokens[2:]:
+                dataset = sibling.get_dataset_id(int(id))
+                if not dataset:
+                    dataset = self.rest.get_dataset_by_id(int(id))
+                sets += [dataset]
+            sibling.truncate_dataset_list(tokens[1])
+            [sibling.add_dataset(dataset) for dataset in sets]
             self.reconfigure()
         elif tokens[0] == CMD_STATUS:
             self.broadcast_state()
 
-    def reconfigure(self):
-        logging.info("Checking dataset availability")
-        if len(self.me.datasets) == 0:
-            logging.warning("No datasets available locally")
-            return
-
-        allsets = list(itertools.chain(*[x.datasets for x in self.siblings.itervalues()]))
+    def get_availability(self, model):
+        allsets = [y['id'] for y in list(itertools.chain(*[x.datasets[model] for x in self.siblings.itervalues()]))]
         sortedsets = sorted(set(allsets), reverse=True)
         counts = collections.Counter(allsets)
         prospect = None
         pop = dict(counts)
-
         for dataset in sortedsets:
             hosts = pop[dataset]
             percent = (float(hosts) / len(self.siblings)) * 100
-            current = "[current]" if self.me.dataset == dataset else ""
             if not prospect and percent >= LOAD_THRESHOLD:
                 prospect = (dataset, hosts,)
+        return sortedsets, pop, prospect
+
+    def print_availability(self, model, sortedsets, pop):
+        for dataset in sortedsets:
+            hosts = pop[dataset]
+            percent = (float(hosts) / len(self.siblings)) * 100
+            current = "[current]" if self.me.dataset[model] == dataset else ""
             logging.info("  %6d: %2d hosts [%3d%%] %s" % (dataset, hosts, percent, current))
 
-        if not prospect:
-            logging.info("Not enough hosts with the most popular dataset, below threshold of %d%%" % LOAD_THRESHOLD)
-            return
+    def reconfigure(self):
+        for model in self.config.MODELS:
+            if len(self.me.datasets[model]) == 0:
+                logging.warning("No datasets loaded for model %s" % model)
+                continue
 
-        dataset, hosts = prospect
-        percent = (float(hosts) / len(self.siblings)) * 100
+            sortedsets, pop, prospect = self.get_availability(model)
 
-        if dataset == self.me.dataset:
-            return
+            if not prospect:
+                dataset = sortedsets[0]
+                hosts = pop[dataset]
+                percent = (float(hosts) / len(self.siblings)) * 100
+                logging.info("%s: %d/%d hosts has new dataset %d, %d%% is still below threshold of %d%%" % (model, hosts, len(self.siblings), dataset, percent, LOAD_THRESHOLD))
+                return
 
-        if dataset not in self.me.datasets:
-            logging.warning("I don't have the most popular dataset and I should be disabled!")
-            return
+            dataset, hosts = prospect
+            percent = (float(hosts) / len(self.siblings)) * 100
 
-        logging.info("Going to load a new dataset since it is available on %d%% of hosts (threshold %d%%)" % (percent, LOAD_THRESHOLD))
-        self.load_dataset_id(dataset)
+            if dataset == self.me.dataset[model]:
+                return
 
-    def load_dataset_id(self, id):
-        logging.info("Setting currently loaded dataset to %d" % id)
-        self.me.dataset = id
+            if not self.me.has_dataset_id(dataset):
+                logging.warning("I don't have the most popular %s dataset and I should be disabled!" % model)
+                return
+
+            logging.info("%s: %d/%d hosts has new dataset %d, %d%% is above threshold of %d%%: loading dataset!" % (model, hosts, len(self.siblings), dataset, percent, LOAD_THRESHOLD))
+            self.load_dataset_id(model, dataset)
+
+            logging.info("===== %s availability =====" % model)
+            self.print_availability(model, sortedsets, pop)
+            logging.info("===== end of availability report =====")
+
+    def load_dataset_id(self, model, id):
+        logging.info("Setting currently loaded %s dataset to %d" % (model, id))
+        self.me.dataset[model] = id
         self.broadcast_state()
 
 if __name__ == '__main__':
@@ -172,6 +233,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config = imp.load_source('config', args.config)
+    rest = REST()
 
-    server = Server(config)
+    server = Server(config, rest)
     server.main()
