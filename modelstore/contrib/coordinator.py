@@ -126,25 +126,32 @@ class Server:
             logging.warning("No datasets available locally")
             return
 
-        counts = collections.Counter(list(itertools.chain(*[x.datasets for x in self.siblings.itervalues()])))
+        allsets = list(itertools.chain(*[x.datasets for x in self.siblings.itervalues()]))
+        sortedsets = sorted(set(allsets), reverse=True)
+        counts = collections.Counter(allsets)
+        prospect = None
+        pop = dict(counts)
 
-        for dataset, hosts in counts.most_common():
+        for dataset in sortedsets:
+            hosts = pop[dataset]
             percent = (float(hosts) / len(self.siblings)) * 100
             current = "[current]" if self.me.dataset == dataset else ""
+            if not prospect and percent >= LOAD_THRESHOLD:
+                prospect = (dataset, hosts,)
             logging.info("  %6d: %2d hosts [%3d%%] %s" % (dataset, hosts, percent, current))
 
-        dataset, hosts = counts.most_common(1)[0]
+        if not prospect:
+            logging.info("Not enough hosts with the most popular dataset, below threshold of %d%%" % LOAD_THRESHOLD)
+            return
+
+        dataset, hosts = prospect
         percent = (float(hosts) / len(self.siblings)) * 100
 
         if dataset == self.me.dataset:
             return
 
         if dataset not in self.me.datasets:
-            logging.warning("I'm using an outdated dataset and should be disabled!")
-            return
-
-        if percent < LOAD_THRESHOLD:
-            logging.info("Not enough hosts with the most popular dataset, below threshold of %d%%" % LOAD_THRESHOLD)
+            logging.warning("I don't have the most popular dataset and I should be disabled!")
             return
 
         logging.info("Going to load a new dataset since it is available on %d%% of hosts (threshold %d%%)" % (percent, LOAD_THRESHOLD))
