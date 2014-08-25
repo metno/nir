@@ -1,5 +1,8 @@
 #
-# Runs on WDB2TS machines, receives messages from WDB that data set has been imported
+# coordinator.py
+#
+# Runs on WDB2TS machines, receives messages from WDB which data sets are
+# available in the DB, and synchronizes between other Coordinator nodes.
 #
 
 import imp
@@ -20,18 +23,13 @@ CMD_DATASETS = 'datasets'
 
 REST_URI = 'http://localhost:8000/api/v1'
 
-# Define these in your settings file
-#SIBLINGS = []
-#WDB_HOST = 'localhost'
-#WDB_PORT = 5556
-#PUB_HOST = '0.0.0.0'
-#PUB_PORT = 5557
-
 class REST:
+    """Interface to the REST service providing information about datasets."""
     def __init__(self):
         pass
 
     def get_dataset_by_id(self, id):
+        """Returns a dictionary with dataset information."""
         uri = "%s/dataset/%d/" % (REST_URI, id)
         req = requests.get(uri, headers={'content-type': 'application/json'})
         return json.loads(req.content)
