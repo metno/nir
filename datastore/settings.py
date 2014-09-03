@@ -1,5 +1,5 @@
 """
-Django settings for modelstore project.
+Django settings for datastore project.
 
 For more information on this file, see
 https://docs.djangoproject.com/en/1.6/topics/settings/
@@ -37,7 +37,7 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'haystack',
-    'modelstore.core',
+    'datastore.core',
     'tastypie',
 )
 
@@ -50,9 +50,9 @@ MIDDLEWARE_CLASSES = (
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
 
-ROOT_URLCONF = 'modelstore.urls'
+ROOT_URLCONF = 'datastore.urls'
 
-WSGI_APPLICATION = 'modelstore.wsgi.application'
+WSGI_APPLICATION = 'datastore.wsgi.application'
 
 
 # Database

@@ -13,7 +13,7 @@ v1_api.register(core.api.resources.FileResource())
 
 urlpatterns = patterns('',
     # Examples:
-    # url(r'^$', 'modelstore.views.home', name='home'),
+    # url(r'^$', 'datastore.views.home', name='home'),
     # url(r'^blog/', include('blog.urls')),
 
     url(r'^admin/', include(admin.site.urls)),

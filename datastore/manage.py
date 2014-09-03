@@ -2,8 +2,12 @@
 import os
 import sys
 
+TOP_DIR = os.path.sep + os.path.join(*os.getcwd().split(os.path.sep)[:-1])
+sys.path.append(TOP_DIR)
+
 if __name__ == "__main__":
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "modelstore.settings")
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "datastore.settings")
 
     from django.core.management import execute_from_command_line
 
