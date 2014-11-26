@@ -13,10 +13,9 @@ digraph {
         fontcolor="#aabb44";
         sms_model   [label="SMS model run"];
         sms_load    [label="SMS job"];
-        nir_server  [label="NIR server"];
 
         // Version 2.26.3 of Graphviz sucks; same rank makes arrows point in wrong direction!
-        //rank=same; sms_model sms_load nir_server;
+        //rank=same; sms_model sms_load;
     }
 
     subgraph cluster_ds {
@@ -44,8 +43,7 @@ digraph {
     }
 
     sms_model       -> sms_load;
-    sms_load        -> nir_server   [label="NIR client", fontcolor="#44cc44", fontsize="8"];
-    nir_server      -> datastore    [label="HTTP POST", fontcolor="#cc4444", fontsize="8"];
+    sms_load        -> datastore    [label="HTTP POST", fontcolor="#cc4444", fontsize="8"];
     datastore       -> syncer       [label="ZMQ PUB", fontcolor="#4444cc", fontsize="8"];
     syncer          -> datastore    [label="HTTP GET", fontcolor="#cc4444", fontsize="8"];
     syncer          -> loader       [label="ZMQ REQ", fontcolor="#4444cc", fontsize="8"];
