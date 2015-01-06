@@ -1,0 +1,15 @@
+From https://phab.met.no/T359:
+
+- It has to be possible to refactor the schema
+- When loading models:
+  - Do **not** use `--placedefinition`, this must be automatic
+  - Do **not** use `--loadPlaceDefinition`, because this can hide errors
+  - Do **always** specify --dataversion
+
+The schema itself:
+
+- `dataprovidername` (string, matches WDB)
+- `referencetime` (timestamp with time zone)
+- `storetime` (timestamp with time zone)
+- `dataversion` (integer)
+- `uri` (array of strings)
