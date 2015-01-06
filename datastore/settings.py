@@ -61,7 +61,7 @@ WSGI_APPLICATION = 'datastore.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'transaction_hooks.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'NAME': os.path.join(BASE_DIR, 'tmp', 'db.sqlite3'),
     }
 }
 
