@@ -1,0 +1,39 @@
+Syncer
+======
+Kjører på WeatherAPI-hostene.
+
+- ansvar for å holde data i WDB ajour jf modelstatus
+- holde seg i sync med alle andre syncer-instanser
+- melde i fra til andre syncere om hvilke datasett som er lastet inn i wdb og klar til aktivering i wdb2ts
+- bruke riktige datasett avhengig av prioritering
+- tjenesten for dårlig? ingen modeller? shutdown
+- uregelmessigheter i datasettene hos alle servere: skal vi levere gammelt datasett eller leve med det? regler for dette?
+- vi må se på hvilke ulike feilsituasjoner vi skal håndtere
+- terskler for å bytte til nytt datasett?
+- ved oppstart, skal syncer alltid sjekke modelstatus etter siste datasett, og laste inn dette
+- ved oppstart, spør også andre syncer-instanser etter hvilket datasett de har, og last inn dette
+- hvis datasett ikke kunne lastes inn innen XX, send ut WARNING, deretter innen XX send CRITICAL
+- hvis datasett går i WARNING, tøm database fullstendig og last inn alt på nytt? reboot? remount opdata? etc
+- sjekk av antall tidsskritt
+- wishlist: både Syncer- og wdb2ts-config som autogenererte filer, tatt fra samme Chef-config
+- vi bruker dagens Nagios-sjekk som sjekker wdb mot wdb2ts
+- stoler på at alt som ligger i modelstatus er korrekt data
+- helt lik, eller ikke i prod
+
+Emperor
+=======
+Komponent som kjører på Varnish-server, kommuniserer med Syncer-instansene.
+
+- har ansvar for å melde maskiner inn/ut av varnish
+- kommendolinjeverktøy for denne som rapporterer state
+- passer på å ikke melde ut/inn om man har tatt ned backends manuelt (håndtert gjennom kommandolinjeverktøy?)
+- logging av alt
+
+Syncer v1
+=========
+- MÅ ha informasjon om hvilke datasett som skal lastes inn i WDB
+    - Navn på datasettet
+    - Finn fil i datasettet gjennom regex på filnavn
+    - Hentes vha søk på modelstatus.met.no, deretter via GET
+- Ingen kommunikasjon med andre Syncer-instanser
+- Innlasting til WDB via SSH og *Load
