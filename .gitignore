@@ -1,3 +1,4 @@
 *.pyc
 /tmp/
 modelstatus/venv
+modelstatus/build
