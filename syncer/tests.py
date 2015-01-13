@@ -30,5 +30,24 @@ class SyncerTest(unittest.TestCase):
         syncer.setup_logging('/dev/null', 'ERROR')
         logging.error('test')
 
+class CollectionTest(unittest.TestCase):
+    BASE_URL = 'http://localhost'
+
+    def setUp(self):
+        self.store = syncer.ModelRunCollection(self.BASE_URL)
+
+    def test_get_collection_url(self):
+        self.assertEqual(self.store.get_collection_url(), "%s/model_run" % self.BASE_URL)
+
+    def test_get_resource_url(self):
+        id = 48949832
+        self.assertEqual(self.store.get_resource_url(id), "%s/model_run/%d" % (self.BASE_URL, id))
+
+    def test_unserialize(self):
+        json_string = '{"foo":"bar"}'
+        json_data = {"foo": "bar"}
+        self.assertEqual(self.store.unserialize(json_string), json_data)
+
+
 if __name__ == '__main__':
     unittest.main()
