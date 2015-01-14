@@ -65,14 +65,10 @@ class ModelRunCollection(BaseCollection):
     def __init__(self, base_url):
         return super(self.__class__, self).__init__(base_url, 'model_run')
 
+
 class DataCollection(BaseCollection):
     def __init__(self, base_url):
         return super(self.__class__, self).__init__(base_url, 'data')
-
-
-def setup_logging(config_file):
-    """Set up logging based on configuration file."""
-    return logging.config.fileConfig(config_file, disable_existing_loggers=True)
 
 
 class Configuration:
@@ -111,12 +107,18 @@ class Configuration:
         return self.config_parser.get(section, key)
 
 
+def setup_logging(config_file):
+    """Set up logging based on configuration file."""
+    return logging.config.fileConfig(config_file, disable_existing_loggers=True)
+
+
 def run(config):
     # Sample usage:
     #base_url = config.get('webservice', 'url')
     #model_run_store = ModelRunCollection(base_url)
     #model_run = model_run_store.get(1)
     return EXIT_SUCCESS
+
 
 def main():
 
@@ -147,6 +149,7 @@ def main():
     exitcode = run(config)
 
     return exitcode
+
 
 if __name__ == '__main__':
 
