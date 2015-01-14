@@ -18,16 +18,6 @@ EXIT_SUCCESS = 0
 EXIT_CONFIG = 1
 EXIT_LOGGING = 2
 
-CONFIG_DEFAULTS = {
-    'syncer': {
-        'logfile': DEFAULT_LOG_FILE_PATH,
-        'loglevel': DEFAULT_LOG_LEVEL,
-    },
-    'webservice': {
-        'url': DEFAULT_WEB_SERVICE_BASE_URL,
-    },
-}
-
 #
 # Base object used to access the REST service.
 #
@@ -84,25 +74,44 @@ def setup_logging(config_file):
     """Set up logging based on configuration file."""
     return logging.config.fileConfig(config_file, disable_existing_loggers=True)
 
-def create_config_parser():
-    parser = ConfigParser.SafeConfigParser()
-    parser.add_section('syncer')
-    parser.add_section('wdb')
-    return parser
 
-def read_config_file(parser, config_file):
-    parser.readfp(config_file)
+class Configuration:
+    def __init__(self, *args, **kwargs):
+        self.config_parser = kwargs['config_parser'] if 'config_parser' in kwargs else self.create_config_parser()
+        self.argument_parser = kwargs['argument_parser'] if 'argument_parser' in kwargs else self.create_argument_parser()
+        self.setup_config_parser()
+        self.setup_argument_parser()
+        self.args = object
 
-def create_argument_parser():
-    return argparse.ArgumentParser(CONFIG_DEFAULTS, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    def load(self, config_file):
+        """Read a configuration file"""
+        self.config_parser.readfp(config_file)
 
-def setup_argument_parser(parser):
-    parser.add_argument('-c', '--config', help='path to configuration file', default=DEFAULT_CONFIG_PATH)
-    parser.add_argument('--logfile', help='path to log file', default=DEFAULT_LOG_FILE_PATH)
-    parser.add_argument('--loglevel', help='log level', default=DEFAULT_LOG_LEVEL, choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+    @staticmethod
+    def create_config_parser():
+        """Instantiate a configuration parser"""
+        return ConfigParser.SafeConfigParser()
 
-def parse_args(parser, args):
-    return parser.parse_args(args)
+    @staticmethod
+    def create_argument_parser():
+        """Instantiate a command line argument parser"""
+        return argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    def setup_config_parser(self):
+        self.config_parser.add_section('syncer')
+        self.config_parser.add_section('wdb')
+
+    def setup_argument_parser(self):
+        self.argument_parser.add_argument('-c', '--config', help='path to configuration file', default=DEFAULT_CONFIG_PATH)
+        self.argument_parser.add_argument('--logfile', help='path to log file', default=DEFAULT_LOG_FILE_PATH)
+        self.argument_parser.add_argument('--loglevel', help='log level', default=DEFAULT_LOG_LEVEL, choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+
+    def parse_args(self, args):
+        self.args = self.argument_parser.parse_args(args)
+
+    def get(self, section, key):
+        return self.config_parser.get(section, key)
+
 
 def run(config):
     # Sample usage:
@@ -113,29 +122,21 @@ def run(config):
 
 def main():
 
-    # Parse command line arguments
+    # Parse command line arguments and read the configuration file
     try:
-        argument_parser = create_argument_parser()
-        setup_argument_parser(argument_parser)
-        args = parse_args(argument_parser, sys.argv[1:])
-    except Exception, e:
-        logging.critical("Unhandled exception while parsing command line options: %s" % unicode(e))
-        raise e
-
-    # Read the configuration file
-    try:
-        config = create_config_parser()
-        read_config_file(config, open(args.config))
+        config = Configuration()
+        config.parse_args(sys.argv[1:])
+        config.load(open(config.args.config))
     except IOError, e:
         logging.critical("Could not read configuration file: %s" % unicode(e))
         return EXIT_CONFIG
     except Exception, e:
-        logging.critical("Unhandled exception while reading configuration file: %s" % unicode(e))
+        logging.critical("Unhandled exception while loading configuration: %s" % unicode(e))
         raise e
 
     # Set up proper logging
     try:
-        setup_logging(args.config)
+        setup_logging(config.args.config)
     except ConfigParser.Error, e:
         logging.critical("There is an error in the logging configuration: %s" % unicode(e))
         return EXIT_LOGGING

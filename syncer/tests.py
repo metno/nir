@@ -31,19 +31,23 @@ class SyncerTest(unittest.TestCase):
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
 
-    def test_read_config_file(self):
-        parser = syncer.create_config_parser()
-        syncer.read_config_file(parser, self.config_file)
-        self.assertEqual(parser.get('wdb', 'host'), '127.0.0.1')
-
-    def test_argparse_config(self):
-        parser = syncer.create_argument_parser()
-        syncer.setup_argument_parser(parser)
-        args = syncer.parse_args(parser, ['--config', '/dev/null'])
-        self.assertEqual(args.config, '/dev/null')
-
     def test_setup_logging(self):
         syncer.setup_logging(self.config_file)
+
+
+class ConfigurationTest(unittest.TestCase):
+    def setUp(self):
+        self.config_file = StringIO.StringIO(config_file_contents)
+        self.config = syncer.Configuration()
+
+    def test_read_config_file(self):
+        self.config.load(self.config_file)
+        self.assertEqual(self.config.config_parser.get('wdb', 'host'), '127.0.0.1')
+
+    def test_argparse_config(self):
+        args = self.config.argument_parser.parse_args(['--config', '/dev/null'])
+        self.assertEqual(args.config, '/dev/null')
+
 
 class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'
