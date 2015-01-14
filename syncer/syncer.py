@@ -103,8 +103,6 @@ class Configuration:
 
     def setup_argument_parser(self):
         self.argument_parser.add_argument('-c', '--config', help='path to configuration file', default=DEFAULT_CONFIG_PATH)
-        self.argument_parser.add_argument('--logfile', help='path to log file', default=DEFAULT_LOG_FILE_PATH)
-        self.argument_parser.add_argument('--loglevel', help='log level', default=DEFAULT_LOG_LEVEL, choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
 
     def parse_args(self, args):
         self.args = self.argument_parser.parse_args(args)
