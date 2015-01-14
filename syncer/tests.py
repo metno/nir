@@ -10,13 +10,30 @@ import syncer
 config_file_contents = """
 [wdb]
 host=127.0.0.1
+
+[formatters]
+keys=default
+
+[formatter_default]
+class=logging.Formatter
+
+[handlers]
+keys=
+
+[loggers]
+keys=root
+
+[logger_root]
+handlers=
 """
 
 class SyncerTest(unittest.TestCase):
+    def setUp(self):
+        self.config_file = StringIO.StringIO(config_file_contents)
+
     def test_read_config_file(self):
-        config_file = StringIO.StringIO(config_file_contents)
         parser = syncer.create_config_parser()
-        syncer.read_config_file(parser, config_file)
+        syncer.read_config_file(parser, self.config_file)
         self.assertEqual(parser.get('wdb', 'host'), '127.0.0.1')
 
     def test_argparse_config(self):
@@ -25,10 +42,8 @@ class SyncerTest(unittest.TestCase):
         args = syncer.parse_args(parser, ['--config', '/dev/null'])
         self.assertEqual(args.config, '/dev/null')
 
-    def test_logging(self):
-        """The test is that no exception is thrown."""
-        syncer.setup_logging('/dev/null', 'ERROR')
-        logging.error('test')
+    def test_setup_logging(self):
+        syncer.setup_logging(self.config_file)
 
 class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'

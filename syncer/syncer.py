@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 
 import logging
+import logging.config
 import sys
 import json
 import requests
@@ -17,6 +18,7 @@ EXIT_SUCCESS = 0
 EXIT_CONFIG = 1
 EXIT_LOGGING = 2
 
+CONFIG_DEFAULTS = {
     'syncer': {
         'logfile': DEFAULT_LOG_FILE_PATH,
         'loglevel': DEFAULT_LOG_LEVEL,
@@ -78,13 +80,9 @@ class DataCollection(BaseCollection):
         return super(self.__class__, self).__init__(base_url, 'data')
 
 
-def setup_logging(logfile, loglevel):
-    logger = logging.getLogger('')
-    logger.setLevel(getattr(logging, loglevel))
-    formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
-    file_handler = logging.FileHandler(logfile)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+def setup_logging(config_file):
+    """Set up logging based on configuration file."""
+    return logging.config.fileConfig(config_file, disable_existing_loggers=True)
 
 def create_config_parser():
     parser = ConfigParser.SafeConfigParser()
@@ -106,12 +104,6 @@ def setup_argument_parser(parser):
 def parse_args(parser, args):
     return parser.parse_args(args)
 
-def merge_args_into_config(config_parser, args):
-    if args.logfile != CONFIG_DEFAULTS['syncer']['logfile']:
-        config_parser.set('syncer', 'logfile', args.logfile)
-    if args.logfile != CONFIG_DEFAULTS['syncer']['loglevel']:
-        config_parser.set('syncer', 'loglevel', args.loglevel)
-
 def run(config):
     # Sample usage:
     #base_url = config.get('webservice', 'url')
@@ -120,10 +112,6 @@ def run(config):
     return EXIT_SUCCESS
 
 def main():
-
-    # Set up default initial logging, in case something goes wrong during config parsing
-    logging.basicConfig(format=DEFAULT_LOG_FORMAT, level=DEFAULT_LOG_LEVEL)
-    logging.info("Starting Syncer")
 
     # Parse command line arguments
     try:
@@ -138,7 +126,6 @@ def main():
     try:
         config = create_config_parser()
         read_config_file(config, open(args.config))
-        merge_args_into_config(config, args)
     except IOError, e:
         logging.critical("Could not read configuration file: %s" % unicode(e))
         return EXIT_CONFIG
@@ -148,21 +135,27 @@ def main():
 
     # Set up proper logging
     try:
-        logfile = config.get('syncer', 'logfile')
-        loglevel = config.get('syncer', 'loglevel')
-        logging.info("Setting log level to %s" % loglevel)
-        setup_logging(logfile, loglevel)
-        logging.info("Log file opened")
+        setup_logging(args.config)
+    except ConfigParser.Error, e:
+        logging.critical("There is an error in the logging configuration: %s" % unicode(e))
+        return EXIT_LOGGING
     except IOError, e:
-        logging.critical("Could not open log file: %s" % unicode(e))
+        logging.critical("Could not read logging configuration file: %s" % unicode(e))
         return EXIT_LOGGING
 
     # Start main application
-    logging.info("Syncer is ready")
+    logging.info("Syncer is started")
     exitcode = run(config)
-    logging.info("Exiting with status %d", exitcode)
 
     return exitcode
 
 if __name__ == '__main__':
-    sys.exit(main())
+
+    # Set up default initial logging, in case something goes wrong during config parsing
+    logging.basicConfig(format=DEFAULT_LOG_FORMAT, level=DEFAULT_LOG_LEVEL)
+    logging.info("Starting Syncer...")
+
+    exit_code = main()
+
+    logging.info("Exiting with status %d", exit_code)
+    sys.exit(exit_code)
