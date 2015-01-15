@@ -5,7 +5,9 @@ import argparse
 import unittest
 import ConfigParser
 import StringIO
+
 import syncer
+import syncer.rest
 
 config_file_contents = """
 [wdb]
@@ -59,7 +61,7 @@ class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'
 
     def setUp(self):
-        self.store = syncer.ModelRunCollection(self.BASE_URL)
+        self.store = syncer.rest.ModelRunCollection(self.BASE_URL)
 
     def test_get_collection_url(self):
         self.assertEqual(self.store.get_collection_url(), "%s/model_run" % self.BASE_URL)
