@@ -107,17 +107,49 @@ class Configuration:
         return self.config_parser.get(section, key)
 
 
+class Model:
+    def __init__(self, data):
+        [setattr(self, key, value) for key, value in data.iteritems()]
+
+    @staticmethod
+    def data_from_config_section(config, section_name):
+        data = {}
+        for key in ['data_provider']:
+            data[key] = config.get(section_name, key)
+        return data
+
+
+class Daemon:
+    def __init__(self, config, models):
+        self.config = config
+        self.models = models
+
+        if not isinstance(models, set):
+            raise TypeError("'models' must be a set of models")
+        for model in self.models:
+            if not isinstance(model, Model):
+                raise TypeError("'models' set must contain only models")
+
+        logging.info("Daemon initialized with the following model configuration:")
+        num_models = len(self.models)
+        for num, model in enumerate(self.models):
+            logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
+
+    def run(self):
+        logging.info("Daemon started.")
+        # Sample usage:
+        #base_url = config.get('webservice', 'url')
+        #model_run_store = ModelRunCollection(base_url)
+        #model_run = model_run_store.get(1)
+        logging.info("Daemon is terminating.")
+        return EXIT_SUCCESS
+
+
+
+
 def setup_logging(config_file):
     """Set up logging based on configuration file."""
     return logging.config.fileConfig(config_file, disable_existing_loggers=True)
-
-
-def run(config):
-    # Sample usage:
-    #base_url = config.get('webservice', 'url')
-    #model_run_store = ModelRunCollection(base_url)
-    #model_run = model_run_store.get(1)
-    return EXIT_SUCCESS
 
 
 def main():
@@ -146,9 +178,12 @@ def main():
 
     # Start main application
     logging.info("Syncer is started")
-    exitcode = run(config)
+    model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
+    models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
+    daemon = Daemon(config, models)
+    exit_code = daemon.run()
 
-    return exitcode
+    return exit_code
 
 
 if __name__ == '__main__':

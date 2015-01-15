@@ -11,6 +11,12 @@ config_file_contents = """
 [wdb]
 host=127.0.0.1
 
+[model_foo]
+data_provider=bar
+
+[model_bar]
+shizzle=foo
+
 [formatters]
 keys=default
 
@@ -66,6 +72,50 @@ class CollectionTest(unittest.TestCase):
         json_string = '{"foo":"bar"}'
         json_data = {"foo": "bar"}
         self.assertEqual(self.store.unserialize(json_string), json_data)
+
+
+class DaemonTest(unittest.TestCase):
+    def test_instance(self):
+        config = syncer.Configuration()
+        models = set()
+        daemon = syncer.Daemon(config, models)
+
+    def test_instance_model_type_error(self):
+        config = syncer.Configuration()
+        models = ['invalid type']
+        with self.assertRaises(TypeError):
+            daemon = syncer.Daemon(config, models)
+
+    def test_instance_model_class_error(self):
+        config = syncer.Configuration()
+        models = set([object()])
+        with self.assertRaises(TypeError):
+            daemon = syncer.Daemon(config, models)
+
+
+class ModelTest(unittest.TestCase):
+    VALID_FIXTURE = {
+            'data_provider': 'bar'
+            }
+
+    def setUp(self):
+        self.config_file = StringIO.StringIO(config_file_contents)
+        self.config = syncer.Configuration()
+        self.config.load(self.config_file)
+
+    def test_data_from_config_section(self):
+        data = syncer.Model.data_from_config_section(self.config, 'model_foo')
+        self.assertEqual(data, self.VALID_FIXTURE)
+
+    def test_instantiate(self):
+        model = syncer.Model(self.VALID_FIXTURE)
+        for key, value in self.VALID_FIXTURE.iteritems():
+            self.assertEqual(getattr(model, key), value)
+
+    def test_data_from_config_section_missing_key(self):
+        with self.assertRaises(ConfigParser.NoOptionError):
+            syncer.Model.data_from_config_section(self.config, 'model_bar')
+
 
 
 if __name__ == '__main__':
