@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+# coding: utf-8
 
 import logging
 import logging.config
@@ -152,12 +152,12 @@ def setup_logging(config_file):
     return logging.config.fileConfig(config_file, disable_existing_loggers=True)
 
 
-def main():
+def run(argv):
 
     # Parse command line arguments and read the configuration file
     try:
         config = Configuration()
-        config.parse_args(sys.argv[1:])
+        config.parse_args(argv)
         config.load(open(config.args.config))
     except IOError, e:
         logging.critical("Could not read configuration file: %s" % unicode(e))
@@ -186,13 +186,12 @@ def main():
     return exit_code
 
 
-if __name__ == '__main__':
-
+def main(argv):
     # Set up default initial logging, in case something goes wrong during config parsing
     logging.basicConfig(format=DEFAULT_LOG_FORMAT, level=DEFAULT_LOG_LEVEL)
     logging.info("Starting Syncer...")
 
-    exit_code = main()
+    exit_code = run(argv)
 
     logging.info("Exiting with status %d", exit_code)
     sys.exit(exit_code)

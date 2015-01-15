@@ -1,0 +1,11 @@
+#!/usr/bin/env python2.7
+
+import os
+import sys
+
+syncer_root_path = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/..')
+sys.path.append(syncer_root_path)
+
+import syncer
+
+syncer.main(['--config', os.path.join(syncer_root_path, 'etc', 'config.ini')])
