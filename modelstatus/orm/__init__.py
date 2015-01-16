@@ -4,7 +4,7 @@ import sqlalchemy.ext.declarative
 import sqlalchemy.orm
 import sqlalchemy
 import psycopg2
-import os
+import datetime
 
 Base = sqlalchemy.ext.declarative.declarative_base() 
 class ModelRun(Base):
@@ -12,9 +12,14 @@ class ModelRun(Base):
     # Here we define columns for the table model_run
     # Notice that each column is also a normal Python instance attribute.
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
-    reference_time = sqlalchemy.Column(sqlalchemy.DateTime(timezone=False), nullable=False)
+    reference_time = sqlalchemy.Column(sqlalchemy.DateTime(timezone=False), 
+                                       nullable=False)
     data_provider = sqlalchemy.Column(sqlalchemy.String, nullable=False)
-
+    version = sqlalchemy.Column(sqlalchemy.Integer)
+    created_at = sqlalchemy.Column(sqlalchemy.DateTime, 
+                                     default=datetime.datetime.utcnow)
+    __table_args__ = (sqlalchemy.UniqueConstraint('data_provider', 'reference_time', 'version'),)
+                 
 class Data(Base):
     __tablename__ = 'data'
     # Here we define columns for the table data.
