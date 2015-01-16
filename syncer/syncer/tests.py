@@ -80,7 +80,8 @@ class DaemonTest(unittest.TestCase):
     def test_instance(self):
         config = syncer.Configuration()
         models = set()
-        daemon = syncer.Daemon(config, models)
+        model_run_collection = syncer.rest.ModelRunCollection('http://localhost')
+        daemon = syncer.Daemon(config, models, model_run_collection)
 
     def test_instance_model_type_error(self):
         config = syncer.Configuration()

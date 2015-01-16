@@ -13,7 +13,6 @@ DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
 DEFAULT_LOG_FILE_PATH = '/var/log/syncer.log'
 DEFAULT_LOG_LEVEL = 'DEBUG'
 DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
-DEFAULT_WEB_SERVICE_BASE_URL = 'https://modelstatus.met.no'
 
 EXIT_SUCCESS = 0
 EXIT_CONFIG = 1
@@ -59,6 +58,7 @@ class Configuration:
 class Model:
     def __init__(self, data):
         [setattr(self, key, value) for key, value in data.iteritems()]
+        self.current_model_run = None
 
     @staticmethod
     def data_from_config_section(config, section_name):
@@ -69,9 +69,10 @@ class Model:
 
 
 class Daemon:
-    def __init__(self, config, models):
+    def __init__(self, config, models, model_run_collection):
         self.config = config
         self.models = models
+        self.model_run_collection = model_run_collection
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -84,12 +85,17 @@ class Daemon:
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
 
+    def get_latest_model_run(self, model):
+        if not isinstance(model, Model):
+            raise TypeError("Only accepts syncer.Model as argument")
+        raise NotImplementedError("Too early for this, son")
+
+    def get_latest_model_runs(self):
+        for model in self.models:
+            self.get_latest_model_run(model)
+
     def run(self):
         logging.info("Daemon started.")
-        # Sample usage:
-        #base_url = config.get('webservice', 'url')
-        #model_run_store = ModelRunCollection(base_url)
-        #model_run = model_run_store.get(1)
         logging.info("Daemon is terminating.")
         return EXIT_SUCCESS
 
@@ -129,7 +135,9 @@ def run(argv):
     logging.info("Syncer is started")
     model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
-    daemon = Daemon(config, models)
+    base_url = config.get('webservice', 'url')
+    model_run_collection = syncer.rest.ModelRunCollection(base_url)
+    daemon = Daemon(config, models, model_run_collection)
     exit_code = daemon.run()
 
     return exit_code

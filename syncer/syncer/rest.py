@@ -6,14 +6,29 @@ REST API service.
 import requests
 import json
 
+
+class BaseResource(object):
+    def __init__(self, data):
+        [setattr(self, key, value) for key, value in data.iteritems()]
+
+
+class ModelRun(BaseResource):
+    pass
+
+
+class Data(BaseResource):
+    pass
+
+
 class BaseCollection(object):
     """Base object used to access the REST service."""
 
-    def __init__(self, base_url, resource_name):
+    def __init__(self, base_url):
+        if not issubclass(self.resource, BaseResource):
+            raise TypeError('syncer.rest.BaseCollection.resource must be inherited from syncer.rest.BaseResource')
         self.session = requests.Session()
         self.session.headers.update({'content-type': 'application/json'})
         self.base_url = base_url
-        self.resource_name = resource_name
 
     def get_collection_url(self):
         """Return the URL for the resource collection"""
@@ -45,16 +60,23 @@ class BaseCollection(object):
         data = self.get_request_data(request)
         return self.unserialize(data)
 
-#
-# Access model runs and data sets through the REST service.
-#
+    def get_object(self, id):
+        """High level function, returns an object inheriting from BaseResource"""
+        data = self.get(id)
+        resource = self.resource
+        object_ = resource(data)
+        return object_
+
+
 class ModelRunCollection(BaseCollection):
     """Access the 'model_run' collection of the REST service."""
-    def __init__(self, base_url):
-        return super(self.__class__, self).__init__(base_url, 'model_run')
+
+    resource = ModelRun
+    resource_name = 'model_run'
 
 
 class DataCollection(BaseCollection):
     """Access the 'data' collection of the REST service."""
-    def __init__(self, base_url):
-        return super(self.__class__, self).__init__(base_url, 'data')
+
+    resource = Data
+    resource_name = 'data'
