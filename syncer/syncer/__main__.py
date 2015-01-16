@@ -5,4 +5,4 @@ import logging
 import syncer
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    syncer.main(sys.argv[1:])
