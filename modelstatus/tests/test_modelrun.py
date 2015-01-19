@@ -1,14 +1,16 @@
 import falcon
 import falcon.testing
 import unittest
-import modelstatus.api.modelrun
 import json
+import modelstatus.api.modelrun
+import modelstatus.tests.test_utils
 
 class TestModelRunResource(falcon.testing.TestBase):
     
     def before(self):
+
         self.url = '/v0/model_run'
-        self.resource  = modelstatus.api.modelrun.CollectionResource()
+        self.resource  = modelstatus.api.modelrun.CollectionResource(modelstatus.tests.test_utils.get_test_logger())
         self.api.add_route(self.url,self.resource)
         self.doc = json.dumps('{"data_provider": "arome_metcoop_2500m", "reference_time":"2015-01-12T06:00:00Z"}')
 

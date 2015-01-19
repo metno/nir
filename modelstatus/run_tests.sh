@@ -17,6 +17,7 @@ pip install -r requirements.txt
 bn=`basename $0`
 dirname=`dirname $bn`
 export PYTHONPATH=`readlink -m $dirname/..`
+
 cd tests
 
 python -m unittest discover

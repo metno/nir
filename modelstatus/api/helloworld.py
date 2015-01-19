@@ -1,6 +1,7 @@
 import falcon
+import modelstatus.api
 
-class HelloWorldResource:
+class HelloWorldResource(modelstatus.api.BaseResource):
 
     def on_get(self, req, resp):
         resp.body = "Hello world!\n"

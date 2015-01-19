@@ -1,5 +1,21 @@
 # modelstatus.met.no
 
+## Start application
+
+```
+export PYTHONPATH=../
+virtualenv virtualenv
+source virtualenv/bin/activate
+pip install -r requirements.txt
+python app.py --config=config.ini
+```
+
+## Run tests for application
+
+```
+./run_tests.sh
+```
+
 ## modelstatus.met.no REST API
 
 ### Example of requests that need to be made for updating the status of the model arome_metcoop_2500m
