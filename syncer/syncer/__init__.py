@@ -6,6 +6,7 @@ import sys
 import requests
 import argparse
 import ConfigParser
+import time
 
 import syncer.rest
 
@@ -67,6 +68,9 @@ class Model:
             data[key] = config.get(section_name, key)
         return data
 
+    def __repr__(self):
+        return self.data_provider
+
 
 class Daemon:
     def __init__(self, config, models, model_run_collection):
@@ -88,14 +92,33 @@ class Daemon:
     def get_latest_model_run(self, model):
         if not isinstance(model, Model):
             raise TypeError("Only accepts syncer.Model as argument")
-        raise NotImplementedError("Too early for this, son")
+        try:
+            latest = self.model_run_collection.get_latest(model.data_provider)
+            model.current_model_run = latest
+        except syncer.exceptions.RESTException, e:
+            logging.error("REST API threw up with an exception: %s" % e)
 
     def get_latest_model_runs(self):
         for model in self.models:
             self.get_latest_model_run(model)
 
+    def main_loop_inner(self):
+        for model in self.models:
+            if not model.current_model_run:
+                logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
+                self.get_latest_model_run(model)
+
     def run(self):
         logging.info("Daemon started.")
+
+        try:
+            while True:
+                self.main_loop_inner()
+                time.sleep(1)
+
+        except KeyboardInterrupt:
+            logging.info("Terminated by SIGINT")
+
         logging.info("Daemon is terminating.")
         return EXIT_SUCCESS
 
@@ -136,7 +159,8 @@ def run(argv):
     model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
     base_url = config.get('webservice', 'url')
-    model_run_collection = syncer.rest.ModelRunCollection(base_url)
+    verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
+    model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
     daemon = Daemon(config, models, model_run_collection)
     exit_code = daemon.run()
 

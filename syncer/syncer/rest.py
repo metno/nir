@@ -6,6 +6,8 @@ REST API service.
 import requests
 import json
 
+import syncer.exceptions
+
 
 class BaseResource(object):
     def __init__(self, data):
@@ -23,12 +25,22 @@ class Data(BaseResource):
 class BaseCollection(object):
     """Base object used to access the REST service."""
 
-    def __init__(self, base_url):
+    def __init__(self, base_url, verify_ssl):
         if not issubclass(self.resource, BaseResource):
             raise TypeError('syncer.rest.BaseCollection.resource must be inherited from syncer.rest.BaseResource')
         self.session = requests.Session()
         self.session.headers.update({'content-type': 'application/json'})
         self.base_url = base_url
+        self.verify_ssl = verify_ssl
+
+    def _get_request(self, *args, **kwargs):
+        """Wrapper for self.session.get with exception handling"""
+        request = self.session.get(*args, **kwargs)
+        if request.status_code >= 500:
+            raise syncer.exceptions.RESTServiceUnavailableException("Server returned error code %d" % request.status_code)
+        elif request.status_code >= 400:
+            raise syncer.exceptions.RESTServiceClientErrorException("Server returned error code %d" % request.status_code)
+        return request
 
     def get_collection_url(self):
         """Return the URL for the resource collection"""
@@ -44,19 +56,22 @@ class BaseCollection(object):
 
     def unserialize(self, data):
         """Convert JSON encoded data into a dictionary"""
-        return json.loads(data)
+        try:
+            return json.loads(data)
+        except ValueError, e:
+            raise syncer.exceptions.UnserializeException(e)
 
     def search(self, params):
         """High level function, returns a list of search results"""
         url = self.get_collection_url()
-        request = self.session.get(url, params=params)
+        request = self._get_request(url, params=params)
         data = self.get_request_data(request)
         return self.unserialize(data)
 
     def get(self, id):
         """High level function, returns a dictionary with resource"""
         url = self.get_resource_url(id)
-        request = self.session.get(url)
+        request = self._get_request(url)
         data = self.get_request_data(request)
         return self.unserialize(data)
 
@@ -67,12 +82,37 @@ class BaseCollection(object):
         object_ = resource(data)
         return object_
 
+    def filter(self, **kwargs):
+        """
+        Runs a query against the entire collection, filtering with URL parameters.
+        Returns a list of resources inheriting from BaseResource.
+        """
+        url = self.get_collection_url()
+        request = self._get_request(url, params=kwargs, verify=self.verify_ssl)
+        data_str = self.get_request_data(request)
+        data = self.unserialize(data_str)
+        resource = self.resource
+        return [resource(x) for x in data]
+
 
 class ModelRunCollection(BaseCollection):
     """Access the 'model_run' collection of the REST service."""
 
     resource = ModelRun
     resource_name = 'model_run'
+
+    def get_latest(self, data_provider):
+        """Returns the latest model run from the specified data_provider."""
+        order_by = [
+                'created_time:desc',
+                'version:desc',
+                ]
+        params = {
+                'data_provider': data_provider,
+                'order_by': ':'.join(order_by),
+                'limit': 1,
+                }
+        return self.filter(**params)
 
 
 class DataCollection(BaseCollection):

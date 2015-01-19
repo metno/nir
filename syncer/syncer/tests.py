@@ -61,7 +61,7 @@ class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'
 
     def setUp(self):
-        self.store = syncer.rest.ModelRunCollection(self.BASE_URL)
+        self.store = syncer.rest.ModelRunCollection(self.BASE_URL, True)
 
     def test_get_collection_url(self):
         self.assertEqual(self.store.get_collection_url(), "%s/model_run" % self.BASE_URL)
@@ -80,7 +80,7 @@ class DaemonTest(unittest.TestCase):
     def test_instance(self):
         config = syncer.Configuration()
         models = set()
-        model_run_collection = syncer.rest.ModelRunCollection('http://localhost')
+        model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         daemon = syncer.Daemon(config, models, model_run_collection)
 
     def test_instance_model_type_error(self):
