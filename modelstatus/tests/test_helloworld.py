@@ -4,11 +4,14 @@ import unittest
 import modelstatus.api.helloworld
 import modelstatus.tests.test_utils
 
+api_base_url = modelstatus.tests.test_utils.get_api_base_url()
+
 class TestHelloWorldResource(falcon.testing.TestBase):
 
     def before(self):
-        self.url = '/v0/helloworld'
-        self.resource = modelstatus.api.helloworld.HelloWorldResource(modelstatus.tests.test_utils.get_test_logger())
+        self.url = api_base_url + '/helloworld'
+        self.resource = modelstatus.api.helloworld.HelloWorldResource(api_base_url, 
+                                                                      modelstatus.tests.test_utils.get_test_logger())
         self.api.add_route(self.url,self.resource)
         
     def test_body(self):

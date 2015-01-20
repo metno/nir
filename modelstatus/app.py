@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 
 import sys
 import falcon
@@ -7,6 +8,7 @@ import logging
 import logging.config
 import modelstatus.api.helloworld 
 import modelstatus.api.modelrun
+import modelstatus.api.data
 
 from wsgiref import simple_server
 
@@ -34,12 +36,23 @@ def parse_arguments(args):
 def start_api(logger):
     """Instantiate api, add all resources and routes and return application object."""
 
+    api_base_url = '/modelstatus/v0'
     application = falcon.API()
-    helloworld = modelstatus.api.helloworld.HelloWorldResource(logger)
-    modelrun_collection = modelstatus.api.modelrun.CollectionResource(logger)
 
-    application.add_route('/v0/helloworld', helloworld)
-    application.add_route('/v0/model_run', modelrun_collection)
+    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger)
+
+    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger)
+    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger)
+
+    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger)
+    data_item = modelstatus.api.data.ItemResource(api_base_url, logger)
+
+    
+    application.add_route(api_base_url + '/helloworld', helloworld)
+    application.add_route(api_base_url + '/model_run', modelrun_collection)
+    application.add_route(api_base_url + '/model_run/{id}', modelrun_item)
+    application.add_route(api_base_url + '/data', data_collection)
+    application.add_route(api_base_url + '/data/{id}', data_item)
 
     return application
 

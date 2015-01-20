@@ -2,23 +2,24 @@ import falcon
 import falcon.testing
 import unittest
 import json
-import modelstatus.api.modelrun
+import modelstatus.api.data
 import modelstatus.tests.test_utils
 
 api_base_url = modelstatus.tests.test_utils.get_api_base_url()
 
-class TestModelRunCollectionResource(falcon.testing.TestBase):
+class TestDataCollectionResource(falcon.testing.TestBase):
     
     def before(self):
 
-        self.url = api_base_url + '/model_run'
-        self.resource  = modelstatus.api.modelrun.CollectionResource(api_base_url, 
+        self.url = api_base_url + '/data'
+        self.resource  = modelstatus.api.data.CollectionResource(api_base_url, 
                                                                      modelstatus.tests.test_utils.get_test_logger())
         self.api.add_route(self.url,self.resource)
-        self.doc = '{"data_provider": "arome_metcoop_2500m", "reference_time":"2015-01-12T06:00:00Z"}'
+        self.doc = '{"model_run":"' + api_base_url + '/model_run/1", "format":"netcdf4", "href": "opdata:///arome2_5/arome_metcoop2_5km_20150112T06Z.nc"}'
+
 
     def test_post_status_code(self):
-        body  = self.simulate_request(self.url,method='POST', body=self.doc)
+        body = self.simulate_request(self.url, method='POST', body=self.doc)
         self.assertEqual(self.srmock.status, falcon.HTTP_503)
 
     def test_get_body(self):
@@ -30,13 +31,13 @@ class TestModelRunCollectionResource(falcon.testing.TestBase):
         self.simulate_request(self.url,method='GET')
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
 
-class TestModelRunItemResource(falcon.testing.TestBase):
+class TestDataItemResource(falcon.testing.TestBase):
     
     def before(self):
 
-        self.base_url = api_base_url + '/model_run'
-        self.route = api_base_url + '/model_run/{id}'
-        self.resource  = modelstatus.api.modelrun.ItemResource(api_base_url,
+        self.base_url = api_base_url + '/data'
+        self.route = api_base_url + '/data/{id}'
+        self.resource  = modelstatus.api.data.ItemResource(api_base_url,
                                                                modelstatus.tests.test_utils.get_test_logger())
         self.api.add_route(self.route, self.resource)
 
