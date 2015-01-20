@@ -60,6 +60,7 @@ class Model:
     def __init__(self, data):
         [setattr(self, key, value) for key, value in data.iteritems()]
         self.current_model_run = None
+        self.current_model_run_initialized = False
 
     @staticmethod
     def data_from_config_section(config, section_name):
@@ -67,6 +68,12 @@ class Model:
         for key in ['data_provider']:
             data[key] = config.get(section_name, key)
         return data
+
+    def set_current_model_run(self, model_run):
+        if model_run is not None and not isinstance(model_run, syncer.rest.BaseResource):
+            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % __func__)
+        self.current_model_run = model_run
+        self.current_model_run_initialized = True
 
     def __repr__(self):
         return self.data_provider
@@ -90,25 +97,45 @@ class Daemon:
             logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
 
     def get_latest_model_run(self, model):
+        """Fetch the latest model run from REST API, and assign it to the provided Model."""
+
         if not isinstance(model, Model):
             raise TypeError("Only accepts syncer.Model as argument")
+
         try:
+            # Try fetching the latest data set
             latest = self.model_run_collection.get_latest(model.data_provider)
-            model.current_model_run = latest
+
+            # No results from server, should only happen in freshly installed instances
+            if len(latest) == 0:
+                logging.info("REST API does not contain any recorded model runs.")
+                logging.warn("Syncer will not query for model runs again until restarted, or notified by publisher.")
+                model.set_current_model_run(None)
+
+            # More than one result, this is a server error and should not happen
+            elif len(latest) > 1:
+                logging.error("REST API returned more than one result when fetching latest model run, this should not happen!")
+
+            # Valid result
+            else:
+                model.set_current_model_run(latest[0])
+                logging.info("Model %s has new model run: %s" % (model, model.current_model_run))
+
+        # Server threw an error, recover from that
         except syncer.exceptions.RESTException, e:
             logging.error("REST API threw up with an exception: %s" % e)
 
-    def get_latest_model_runs(self):
-        for model in self.models:
-            self.get_latest_model_run(model)
-
     def main_loop_inner(self):
+        """Workhorse of the main loop"""
         for model in self.models:
-            if not model.current_model_run:
+
+            # Try to initialize all un-initialized models with current model run status
+            if not model.current_model_run_initialized:
                 logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
                 self.get_latest_model_run(model)
 
     def run(self):
+        """Responsible for running the main loop. Returns the program exit code."""
         logging.info("Daemon started.")
 
         try:

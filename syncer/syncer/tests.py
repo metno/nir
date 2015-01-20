@@ -5,9 +5,11 @@ import argparse
 import unittest
 import ConfigParser
 import StringIO
+import datetime
 
 import syncer
 import syncer.rest
+import syncer.exceptions
 
 config_file_contents = """
 [wdb]
@@ -119,6 +121,29 @@ class ModelTest(unittest.TestCase):
         with self.assertRaises(ConfigParser.NoOptionError):
             syncer.Model.data_from_config_section(self.config, 'model_bar')
 
+
+class ModelRunTest(unittest.TestCase):
+    """Tests the syncer.rest.ModelRun resource"""
+
+    VALID_FIXTURE = {
+            'id': 1,
+            'data_provider': 'arome_metcoop_2500m',
+            'reference_time': '2015-01-19T16:04:40+0000',
+            'version': 1337,
+            }
+
+    def test_initialize_with_invalid_reference_time(self):
+        invalid_fixture = self.VALID_FIXTURE
+        invalid_fixture['reference_time'] = 'in a galaxy far, far away'
+        with self.assertRaises(ValueError):
+            model_run = syncer.rest.ModelRun(invalid_fixture)
+
+    def test_initialize_with_correct_data(self):
+        model_run = syncer.rest.ModelRun(self.VALID_FIXTURE)
+        self.assertIsInstance(model_run.id, int)
+        self.assertIsInstance(model_run.data_provider, str)
+        self.assertIsInstance(model_run.reference_time, datetime.datetime)
+        self.assertIsInstance(model_run.version, int)
 
 
 if __name__ == '__main__':

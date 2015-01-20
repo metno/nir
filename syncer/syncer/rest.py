@@ -3,19 +3,54 @@ The REST module defines all classes used to interface against the modelstatus
 REST API service.
 """
 
+import datetime
 import requests
 import json
+import dateutil.parser
 
 import syncer.exceptions
 
 
 class BaseResource(object):
+    required_parameters = []
+
     def __init__(self, data):
+        """
+        Initialize a resource with a Python dictionary.
+        The constructor takes a data dictionary instead of a strict parameter
+        list because we need to iterate over the parameters anyway and assign
+        them to the class. It's simpler and DRY-er just to specify them once,
+        in the 'required_parameters' list.
+        """
         [setattr(self, key, value) for key, value in data.iteritems()]
+        self.validate()
+        self.initialize()
+
+    def initialize(self):
+        """Do variable initialization, overridden by subclasses"""
+        pass
+
+    def validate(self):
+        """
+        Data validation, run before initialize(). May be overridden by
+        subclasses. May throw exceptions.
+        """
+        try:
+            for required_parameter in self.required_parameters:
+                getattr(self, required_parameter)
+        except:
+            raise TypeError("Required parameter %s not specified" % required_parameter)
 
 
 class ModelRun(BaseResource):
-    pass
+    required_parameters = ['id', 'data_provider', 'reference_time', 'version']
+
+    def initialize(self):
+        self.reference_time = dateutil.parser.parse(self.reference_time)
+
+    def __repr__(self):
+        return "ModelRun id=%d data_provider=%s reference_time=%s version=%d" % \
+            (self.id, self.data_provider, self.reference_time.strftime('%s'), self.version)
 
 
 class Data(BaseResource):
@@ -79,7 +114,10 @@ class BaseCollection(object):
         """High level function, returns an object inheriting from BaseResource"""
         data = self.get(id)
         resource = self.resource
-        object_ = resource(data)
+        try:
+            object_ = resource(data)
+        except Exception, e:
+            raise syncer.exceptions.InvalidResourceException(e)
         return object_
 
     def filter(self, **kwargs):
@@ -91,8 +129,13 @@ class BaseCollection(object):
         request = self._get_request(url, params=kwargs, verify=self.verify_ssl)
         data_str = self.get_request_data(request)
         data = self.unserialize(data_str)
+
         resource = self.resource
-        return [resource(x) for x in data]
+        try:
+            resources = [resource(x) for x in data]
+        except Exception, e:
+            raise syncer.exceptions.InvalidResourceException(e)
+        return resources
 
 
 class ModelRunCollection(BaseCollection):
@@ -104,7 +147,7 @@ class ModelRunCollection(BaseCollection):
     def get_latest(self, data_provider):
         """Returns the latest model run from the specified data_provider."""
         order_by = [
-                'created_time:desc',
+                'reference_time:desc',
                 'version:desc',
                 ]
         params = {

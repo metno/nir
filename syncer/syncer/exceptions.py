@@ -17,3 +17,7 @@ class RESTServiceUnavailableException(RESTException):
 class UnserializeException(RESTException):
     """Thrown when the data from the REST API could not be decoded."""
     pass
+
+class InvalidResourceException(RESTException):
+    """Thrown when the server returns an invalid resource."""
+    pass
