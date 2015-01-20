@@ -14,7 +14,7 @@ import modelstatus.api.data
 
 from wsgiref import simple_server
 
-DEFAULT_CONFIG_PATH = '/etc/config.ini'
+DEFAULT_CONFIG_PATH = '/etc/modelstatus.ini'
 DEFAULT_LOG_LEVEL = 'DEBUG'
 DEFAULT_LOG_FORMAT  = '%(asctime)s (%(levelname)s) %(message)s'
 
