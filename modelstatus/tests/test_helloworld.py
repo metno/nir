@@ -11,7 +11,8 @@ class TestHelloWorldResource(falcon.testing.TestBase):
     def before(self):
         self.url = api_base_url + '/helloworld'
         self.resource = modelstatus.api.helloworld.HelloWorldResource(api_base_url, 
-                                                                      modelstatus.tests.test_utils.get_test_logger())
+                                                                      modelstatus.tests.test_utils.get_test_logger(),
+                                                                      None)
         self.api.add_route(self.url,self.resource)
         
     def test_body(self):

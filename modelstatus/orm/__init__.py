@@ -7,6 +7,7 @@ import psycopg2
 import datetime
 
 Base = sqlalchemy.ext.declarative.declarative_base() 
+
 class ModelRun(Base):
     __tablename__ = 'model_run'
     # Here we define columns for the table model_run
@@ -30,3 +31,8 @@ class Data(Base):
     model_run_id = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey('model_run.id'))
     model_run = sqlalchemy.orm.relationship(ModelRun)
 
+def get_sqlite_memory_session():
+    engine = sqlalchemy.engine.create_engine('sqlite://')
+    DBSession = sqlalchemy.orm.sessionmaker(bind=engine)
+    session = DBSession()
+    return Base.metadata.create_all(engine)

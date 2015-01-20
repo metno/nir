@@ -5,9 +5,10 @@ import modelstatus.utils
 class BaseResource(object):
     """Parent class of all API resources"""
 
-    def __init__(self, api_base_url, logger):
+    def __init__(self, api_base_url, logger, orm):
         self.logger = logger
         self.api_base_url = api_base_url
+        self.orm = orm
 
 
 class BaseCollectionResource(BaseResource):

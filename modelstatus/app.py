@@ -6,6 +6,8 @@ import ConfigParser
 import argparse
 import logging
 import logging.config
+
+import modelstatus.orm
 import modelstatus.api.helloworld 
 import modelstatus.api.modelrun
 import modelstatus.api.data
@@ -39,13 +41,15 @@ def start_api(logger):
     api_base_url = '/modelstatus/v0'
     application = falcon.API()
 
-    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger)
+    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, None)
 
-    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger)
-    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger)
+    modelrun_orm = modelstatus.orm.ModelRun()
+    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, modelrun_orm)
+    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, modelrun_orm)
 
-    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger)
-    data_item = modelstatus.api.data.ItemResource(api_base_url, logger)
+    data_orm = modelstatus.orm.Data()
+    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, data_orm)
+    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, data_orm)
 
     
     application.add_route(api_base_url + '/helloworld', helloworld)
