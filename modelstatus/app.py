@@ -40,16 +40,15 @@ def start_api(logger):
 
     api_base_url = '/modelstatus/v0'
     application = falcon.API()
+    orm_session = modelstatus.orm.get_sqlite_memory_session()
 
-    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, None)
+    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, orm_session)
 
-    modelrun_orm = modelstatus.orm.ModelRun()
-    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, modelrun_orm)
-    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, modelrun_orm)
+    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, orm_session)
+    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, orm_session)
 
-    data_orm = modelstatus.orm.Data()
-    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, data_orm)
-    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, data_orm)
+    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, orm_session)
+    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, orm_session)
 
     
     application.add_route(api_base_url + '/helloworld', helloworld)

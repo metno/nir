@@ -1,14 +1,16 @@
 #!/usr/bin/env python2.7
 
-import modelstatus.utils
-import modelstatus.api
 import falcon
 import json
 
+import modelstatus.utils
+import modelstatus.api
+import modelstatus.orm
+
 
 class CollectionResource(modelstatus.api.BaseCollectionResource):
-    pass
+    orm_class = modelstatus.orm.Data
 
 
 class ItemResource(modelstatus.api.BaseItemResource):
-    pass
+    orm_class = modelstatus.orm.Data
