@@ -43,7 +43,7 @@ class BaseCollectionResource(BaseResource):
             # get the object instance
             orm_resource = self.orm_class(**norm_doc)
 
-        except (TypeError, AttributeError), e:
+        except (TypeError, ValueError, AttributeError), e:
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', unicode(e))
 
         # add the resource to the transaction manager
@@ -117,6 +117,10 @@ class BaseCollectionResource(BaseResource):
         return self.normalize_attributes(filters)
 
     def normalize_attributes(self, attr):
+        """
+        Run all attributes through normalizing functions if they exist.
+        Ensures that both input and output parameters look the same everywhere.
+        """
         for key, value in attr.iteritems():
             func_name = 'normalize_' + key
             func = getattr(self, func_name, None)

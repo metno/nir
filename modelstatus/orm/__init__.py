@@ -6,6 +6,7 @@ import sqlalchemy.orm
 import sqlalchemy
 import psycopg2
 import datetime
+import dateutil.tz
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
@@ -39,7 +40,13 @@ class ModelRun(Base, SerializeBase):
     __table_args__ = (sqlalchemy.UniqueConstraint('data_provider', 'reference_time', 'version'),)
 
     def _serialize_datetime(self, value):
-        return value.isoformat()
+        """
+        The database should save everything in UTC, but not all databases
+        support time zones. This function ensures that a time zone-aware object
+        is returned.
+        """
+        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
+        return utc_time.isoformat()
 
     def serialize_reference_time(self, value):
         return self._serialize_datetime(value)

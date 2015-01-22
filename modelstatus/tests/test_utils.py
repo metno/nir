@@ -1,5 +1,6 @@
 import StringIO
 import datetime
+import json
 import logging
 import logging.config
 import falcon.testing
@@ -46,6 +47,9 @@ class TestBase(falcon.testing.TestBase):
                 self.resource.orm.add(model_run)
                 self.resource.orm.add(data)
         self.resource.orm.commit()
+
+    def decode_body(self, body):
+        return json.loads(body[0])
 
 
 
