@@ -32,7 +32,12 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         body = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
         self.assertEqual(self.srmock.status, falcon.HTTP_400)
 
-    def test_post(self):
+    def test_post_fails_on_version(self):
+        self.doc['id'] = 1
+        body = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
+        self.assertEqual(self.srmock.status, falcon.HTTP_400)
+
+    def test_post_status_code(self):
         """
         Test that a POST request generates a 201 status code and that a JSON
         body is returned with the created object.
@@ -82,6 +87,16 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.simulate_request(self.url, method='GET', query_string=query_string)
         self.assertEqual(self.srmock.status, falcon.HTTP_400)
 
+    def test_increment_version(self):
+        """
+        The version field should be incremented if the data_provider
+        and reference_time has been posted before.
+        """
+        first = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
+        second = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
+        first_body = json.loads(first[0])
+        second_body = json.loads(second[0])
+        self.assertTrue(first_body['version'] < second_body['version'])
 
 class TestModelRunItemResource(modelstatus.tests.test_utils.TestBase):
 

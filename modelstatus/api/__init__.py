@@ -30,6 +30,17 @@ class BaseCollectionResource(BaseResource):
         """
         Create a new resource.
         """
+        return self._on_post(req, resp, doc)
+
+    def _on_post(self, req, resp, doc):
+        """
+        Actually create a new resource.
+
+        This is useful for subclasses as they can implement their own
+        on_post() and still take advantage of deserialize() and
+        serialize(). They can then call this to actually create the
+        resource.
+        """
 
         # instantiate the ORM resource from document
         try:
@@ -117,6 +128,7 @@ class BaseCollectionResource(BaseResource):
         return self.normalize_attributes(filters)
 
     def normalize_attributes(self, attr):
+        new_attrs = {}
         """
         Run all attributes through normalizing functions if they exist.
         Ensures that both input and output parameters look the same everywhere.
@@ -125,9 +137,11 @@ class BaseCollectionResource(BaseResource):
             func_name = 'normalize_' + key
             func = getattr(self, func_name, None)
             if callable(func):
-                attr[key] = func(attr[key])
+                new_attrs[key] = func(attr[key])
+            else:
+                new_attrs[key] = value
 
-        return attr
+        return new_attrs
 
     def normalize_limit(self, value):
         """
