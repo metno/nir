@@ -31,6 +31,11 @@ handlers=
 base_api_url = '/modelstatus/v0'
 
 class TestBase(falcon.testing.TestBase):
+
+    def setup_zmq(self):
+        addr = 'ipc://null'
+        self.zmq = modelstatus.zeromq.ZMQPublisher(addr)
+
     def setup_database_fixture(self):
         for model in ['arome25', 'ecdet']:
             for i in xrange(1, 2):
@@ -44,9 +49,9 @@ class TestBase(falcon.testing.TestBase):
                     format='netcdf4',
                     href='/dev/null'
                 )
-                self.resource.orm.add(model_run)
-                self.resource.orm.add(data)
-        self.resource.orm.commit()
+                self.orm.add(model_run)
+                self.orm.add(data)
+        self.orm.commit()
 
     def decode_body(self, body):
         return json.loads(body[0])

@@ -12,12 +12,14 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
 
     def before(self):
 
+        self.setup_zmq()
         self.api_base_url = modelstatus.tests.test_utils.get_api_base_url()
         self.url = self.api_base_url + '/data'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource  = modelstatus.api.data.CollectionResource(self.api_base_url,
                                                                  modelstatus.tests.test_utils.get_test_logger(),
-                                                                 self.orm)
+                                                                 self.orm,
+                                                                 self.zmq)
         self.setup_database_fixture()
         self.api.add_route(self.url,self.resource)
         self.doc = json.dumps({
@@ -60,13 +62,15 @@ class TestDataItemResource(modelstatus.tests.test_utils.TestBase):
 
     def before(self):
 
+        self.setup_zmq()
         self.api_base_url = modelstatus.tests.test_utils.get_api_base_url()
         self.url = self.api_base_url + '/data'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.route = self.api_base_url + '/data/{id}'
         self.resource  = modelstatus.api.data.ItemResource(self.api_base_url,
                                                            modelstatus.tests.test_utils.get_test_logger(),
-                                                           self.orm)
+                                                           self.orm,
+                                                           self.zmq)
         self.setup_database_fixture()
         self.api.add_route(self.route, self.resource)
 

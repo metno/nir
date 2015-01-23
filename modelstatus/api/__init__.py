@@ -4,16 +4,19 @@ import sqlalchemy.exc
 import sqlalchemy.orm.exc
 
 import modelstatus.utils
+import modelstatus.zeromq
 
 class BaseResource(object):
     """
     Parent class of all API resources.
     """
 
-    def __init__(self, api_base_url, logger, orm):
+    def __init__(self, api_base_url, logger, orm, zeromq):
         self.logger = logger
         self.api_base_url = api_base_url
         self.orm = orm
+        self.zeromq = zeromq
+        assert isinstance(self.zeromq, modelstatus.zeromq.ZMQPublisher)
 
 
 class BaseCollectionResource(BaseResource):
@@ -70,6 +73,11 @@ class BaseCollectionResource(BaseResource):
         # Here, we are guaranteed to have an object.
         # Fetch it from the database and return it as part of the request.
         object_ = self.orm.query(self.orm_class).filter(self.orm_class.id == orm_resource.id).one()
+
+        # Publish a message through ZeroMQ publisher
+        self.zeromq.publish_resource(object_)
+
+        # Flush data to client
         resp.body = object_.serialize()
         resp.status = falcon.HTTP_201
 

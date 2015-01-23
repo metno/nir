@@ -8,6 +8,7 @@ import logging
 import logging.config
 
 import modelstatus.orm
+import modelstatus.zeromq
 import modelstatus.api.helloworld 
 import modelstatus.api.modelrun
 import modelstatus.api.data
@@ -35,20 +36,22 @@ def parse_arguments(args):
     return args_parser.parse_args(args)
 
 
-def start_api(logger):
+def start_api(logger, config_parser):
     """Instantiate api, add all resources and routes and return application object."""
 
+    zmq_socket = config_parser.get('zeromq', 'socket')
     api_base_url = '/modelstatus/v0'
     application = falcon.API()
     orm_session = modelstatus.orm.get_sqlite_memory_session()
+    zeromq = modelstatus.zeromq.ZMQPublisher(zmq_socket)
 
-    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, orm_session)
+    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, orm_session, zeromq)
 
-    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, orm_session)
-    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, orm_session)
+    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, orm_session, zeromq)
+    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, orm_session, zeromq)
 
-    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, orm_session)
-    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, orm_session)
+    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, orm_session, zeromq)
+    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, orm_session, zeromq)
 
     
     application.add_route(api_base_url + '/helloworld', helloworld)
@@ -76,7 +79,10 @@ def main():
                          % unicode(e))
         sys.exit(EXIT_LOGGING) 
 
-    return start_api(logger)
+    config_parser = ConfigParser.SafeConfigParser()
+    config_parser.read(config_file)
+
+    return start_api(logger, config_parser)
 
 if __name__ == '__main__':
 

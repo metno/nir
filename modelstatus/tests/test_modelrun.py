@@ -13,12 +13,14 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
 
     def before(self):
 
+        self.setup_zmq()
         self.api_base_url = modelstatus.tests.test_utils.get_api_base_url()
         self.url = self.api_base_url + '/model_run'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource = modelstatus.api.modelrun.CollectionResource(self.api_base_url,
                                                                     modelstatus.tests.test_utils.get_test_logger(),
-                                                                    self.orm)
+                                                                    self.orm,
+                                                                    self.zmq)
         self.setup_database_fixture()
         self.api.add_route(self.url, self.resource)
         self.doc = {"data_provider": "arome_metcoop_2500m", "reference_time": "2015-01-12T06:00:00Z"}
@@ -102,13 +104,15 @@ class TestModelRunItemResource(modelstatus.tests.test_utils.TestBase):
 
     def before(self):
 
+        self.setup_zmq()
         self.api_base_url = modelstatus.tests.test_utils.get_api_base_url()
         self.url = self.api_base_url + '/model_run'
         self.route = self.api_base_url + '/model_run/{id}'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource = modelstatus.api.modelrun.ItemResource(self.api_base_url,
                                                               modelstatus.tests.test_utils.get_test_logger(),
-                                                              self.orm)
+                                                              self.orm,
+                                                              self.zmq)
         self.setup_database_fixture()
         self.api.add_route(self.route, self.resource)
 
