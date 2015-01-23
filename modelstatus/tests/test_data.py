@@ -1,4 +1,3 @@
-import datetime
 import falcon
 import falcon.testing
 import unittest
@@ -43,6 +42,19 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.simulate_request(self.url, method='GET')
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
 
+    def test_post_invalid_model_run_id(self):
+        """
+        It should not be possible to add data resources associated
+        with a non-existing model_run.
+        """
+        doc = json.dumps({
+            "model_run_id": 9999, # does not exist
+            "format": "netcdf4",
+            "href": "opdata:///arome2_5/arome_metcoop2_5km_20150112T06Z.nc"
+        })
+        self.simulate_request(self.url, method='POST', body=doc)
+        self.assertEqual(self.srmock.status, falcon.HTTP_400)
+
 
 class TestDataItemResource(modelstatus.tests.test_utils.TestBase):
 
@@ -61,6 +73,7 @@ class TestDataItemResource(modelstatus.tests.test_utils.TestBase):
     def test_get(self):
         self.simulate_request(self.url + '/1', method='GET')
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
+
 
 if __name__ == '__main__':
     unittest.main()

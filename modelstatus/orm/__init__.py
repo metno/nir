@@ -1,10 +1,9 @@
-import os
-import sys
 import sqlalchemy.inspection
 import sqlalchemy.ext.declarative
 import sqlalchemy.orm
+import sqlalchemy.engine
+import sqlalchemy.event
 import sqlalchemy
-import psycopg2
 import datetime
 import dateutil.tz
 
@@ -75,3 +74,11 @@ def get_sqlite_memory_session():
     session = DBSession()
     Base.metadata.create_all(engine)
     return session
+
+# enable foreign key constraints for sqlite backends
+# http://docs.sqlalchemy.org/en/rel_0_9/dialects/sqlite.html#foreign-key-support
+@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
