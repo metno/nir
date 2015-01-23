@@ -34,12 +34,19 @@ class CollectionResource(BaseResource, modelstatus.api.BaseCollectionResource):
         except AttributeError as e:
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', unicode(e))
 
-        norm_doc = self.normalize_attributes(doc)
-        query = self.orm.query(self.orm_class)
-        query = query.filter(self.orm_class.reference_time == norm_doc['reference_time'],
-                             self.orm_class.data_provider == norm_doc['data_provider']) \
-                             .order_by(self.orm_class.version.desc()) \
-                             .limit(1)
+        try:
+            norm_doc = self.normalize_attributes(doc)
+            query = self.orm.query(self.orm_class)
+            query = query.filter(self.orm_class.reference_time == norm_doc['reference_time'],
+                                 self.orm_class.data_provider == norm_doc['data_provider']) \
+                                 .order_by(self.orm_class.version.desc()) \
+                                 .limit(1)
+
+        except KeyError, e:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', "Missing attribute %s" % unicode(e))
+        except (TypeError, ValueError, AttributeError), e:
+            raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', unicode(e))
+
         latest = query.all()
         if latest:
             doc['version'] = latest[0].version + 1
