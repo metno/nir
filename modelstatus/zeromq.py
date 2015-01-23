@@ -5,6 +5,7 @@ Modelstatus runs a ZMQ publisher that notifies clients about interesting data se
 """
 
 import zmq
+import logging
 
 class ZMQPublisher(object):
     def __init__(self, addr):
@@ -15,6 +16,7 @@ class ZMQPublisher(object):
     def publish_resource(self, resource):
         msg = self.message_from_resource(resource)
         self.sock.send_string(msg)
+        logging.info("Published ZeroMQ message: %s" % msg)
 
     def message_from_resource(self, resource):
-        return u"%s %d" % (resource.__table__, resource.id)
+        return unicode(u"%s %d" % (resource.__table__, resource.id))
