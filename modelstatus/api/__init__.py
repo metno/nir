@@ -75,7 +75,7 @@ class BaseCollectionResource(BaseResource):
         object_ = self.orm.query(self.orm_class).filter(self.orm_class.id == orm_resource.id).one()
 
         # Publish a message through ZeroMQ publisher
-        self.zeromq.publish_resource(object_)
+        #self.zeromq.publish_resource(object_)
 
         # Flush data to client
         resp.body = object_.serialize()
