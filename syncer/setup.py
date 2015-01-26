@@ -8,6 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "requests==2.5.0",
-        "python-dateutil==1.5.0"
+        "python-dateutil==1.5.0",
+        "pyzmq==14.1.1",
     ],
 )

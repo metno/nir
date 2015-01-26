@@ -11,6 +11,7 @@ import re
 import subprocess
 
 import syncer.rest
+import syncer.zeromq
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
 DEFAULT_LOG_FILE_PATH = '/var/log/syncer.log'
@@ -63,12 +64,12 @@ class Configuration:
     def section_options(self, section_name):
         return dict(self.config_parser.items(section_name))
 
+        
 class WDB:
 
     def __init__(self, host, user):
         self.host = host
         self.user = user
-        
 
     def load_model_run(self, model, model_run):
         """Load a model_run."""
@@ -82,7 +83,6 @@ class WDB:
                 
                 modelfile = WDB.convert_opdata_uri_to_file(data_uri)
                 self.load_modelfile(model, modelfile)
-
 
     def load_modelfile(self, model, modelfile):
         """Load a modelfile into wdb host"""
@@ -166,17 +166,20 @@ class Model:
             raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % __func__)
         self.current_model_run = model_run
         self.current_model_run_initialized = True
+        logging.info("Model %s has new model run: %s" % (self, self.current_model_run))
 
     def __repr__(self):
         return self.data_provider
 
 
 class Daemon:
-    def __init__(self, config, models, model_run_collection, wdb):
+    def __init__(self, config, models, zmq, wdb, model_run_collection, data_collection):
         self.config = config
         self.models = models
-        self.model_run_collection = model_run_collection
+        self.zmq = zmq
         self.wdb = wdb
+        self.model_run_collection = model_run_collection
+        self.data_collection = data_collection
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -188,7 +191,6 @@ class Daemon:
         num_models = len(self.models)
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
-
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -213,12 +215,30 @@ class Daemon:
             # Valid result
             else:
                 model.set_current_model_run(latest[0])
-                logging.info("Model %s has new model run: %s" % (model, model.current_model_run))
 
         # Server threw an error, recover from that
         except syncer.exceptions.RESTException, e:
             logging.error("REST API threw up with an exception: %s" % e)
 
+    def handle_zmq_event(self, event):
+        logging.info("Received %s" % unicode(event))
+        if event.resource == 'model_run':
+            id = event.id
+        elif event.resource == 'data':
+            data_object = self.data_collection.get_object(event.id)
+            id = data_object.model_run_id
+        else:
+            logging.info("Nothing to do with this kind of event; no action taken.")
+            return
+
+        model_run_object = self.model_run_collection.get_object(id)
+
+        for model in self.models:
+            if model.data_provider == model_run_object.data_provider:
+                model.set_current_model_run(model_run_object)
+                return
+
+        logging.info("No models configured to handle this event; no action taken.")
         
     def load_model(self, model):
 
@@ -230,7 +250,6 @@ class Daemon:
         except syncer.exceptions.OpdataURIException, e:
             logging.critical("Failed to load some model data due to erroneous opdata uri: %s" % e)
                               
-
     def main_loop_inner(self):
         """Workhorse of the main loop"""
         for model in self.models:
@@ -240,8 +259,15 @@ class Daemon:
                 logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
                 self.get_latest_model_run(model)
                 self.load_model(model)
-                
-                
+
+        # Check if we've got something from the Modelstatus ZeroMQ publisher
+        zmq_event = self.zmq.get_event()
+        if zmq_event:
+            try:
+                self.handle_zmq_event(zmq_event)
+            except syncer.exceptions.RESTException, e:
+                logging.error("Server returned invalid resource: %s" % e)
+
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""
         logging.info("Daemon started.")
@@ -290,9 +316,9 @@ def run(argv):
         return EXIT_LOGGING
 
     try:
-        wdb = WDB(config.get('wdb','host'), config.get('wdb','ssh_user'))
+        wdb = WDB(config.get('wdb', 'host'), config.get('wdb', 'ssh_user'))
     except ConfigParser.NoOptionError, e:
-        logging.critical("Missing configuration for wdb host")
+        logging.critical("Missing configuration for WDB host")
         return EXIT_CONFIG
         
     # Start main application
@@ -301,9 +327,12 @@ def run(argv):
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
     base_url = config.get('webservice', 'url')
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
+    zmq_socket = config.get('zeromq', 'socket')
+    zmq = syncer.zeromq.ZMQSubscriber(zmq_socket)
+    logging.info("ZeroMQ subscriber listening for events from %s" % zmq_socket)
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
-
-    daemon = Daemon(config, models, model_run_collection, wdb)
+    data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
+    daemon = Daemon(config, models, zmq, wdb, model_run_collection, data_collection)
     exit_code = daemon.run()
 
     return exit_code

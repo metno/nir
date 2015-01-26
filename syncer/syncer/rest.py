@@ -6,6 +6,7 @@ REST API service.
 import datetime
 import requests
 import json
+import logging
 import dateutil.parser
 
 import syncer.exceptions
@@ -43,20 +44,24 @@ class BaseResource(object):
 
 
 class ModelRun(BaseResource):
-    required_parameters = ['id', 'data_provider', 'reference_time', 'version', 'data']
+    required_parameters = ['id', 'data_provider', 'reference_time', 'created_date', 'version', 'data']
 
     def initialize(self):
         self.reference_time = dateutil.parser.parse(self.reference_time)
+        self.created_date = dateutil.parser.parse(self.created_date)
         self.data = [Data(x) for x in self.data]
-        
+
     def __repr__(self):
         return "ModelRun id=%d data_provider=%s reference_time=%s version=%d" % \
-            (self.id, self.data_provider, self.reference_time.strftime('%s'), self.version)
+            (self.id, self.data_provider, self.reference_time.isoformat(), self.version)
 
 
 class Data(BaseResource):
-    pass
-    
+    required_parameters = ['id', 'model_run_id', 'format', 'href']
+
+    def __repr__(self):
+        return "Data id=%d model_run_id=%d format=%s href=%s" % \
+            (self.id, self.model_run_id, self.format, self.href)
 
 
 class BaseCollection(object):
@@ -124,6 +129,7 @@ class BaseCollection(object):
             object_ = resource(data)
         except Exception, e:
             raise syncer.exceptions.InvalidResourceException(e)
+        logging.info("Downloaded %s" % object_)
         return object_
 
     def filter(self, **kwargs):

@@ -75,17 +75,18 @@ class WDBTest(unittest.TestCase):
             'id': 1,
             'data_provider': 'arome_metcoop_2500m',
             'reference_time': '2015-01-19T16:04:40+0000',
+            'created_date': '2015-01-19T16:04:40+0000',
             'version': 1337,
             'data': [
                 {
-                    'model_run':'/modelstatus/v0/model_run/1',
+                    'model_run_id': 1,
                     'id': '/modelstatus/v0/data1',
                     'format': 'netcdf4',
                     'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
                     'created_time': '2015-01-12T08:36:03Z'
                 }
             ]
-            }
+        }
 
     def setUp(self):
         self.wdb = syncer.WDB('localhost', 'test')
@@ -147,7 +148,9 @@ class DaemonTest(unittest.TestCase):
     def test_instance(self):
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
-        daemon = syncer.Daemon(self.config, models, model_run_collection, self.wdb)
+        data_collection = syncer.rest.DataCollection('http://localhost', True)
+        zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
+        daemon = syncer.Daemon(self.config, models, zmq, self.wdb, model_run_collection, data_collection)
 
     def test_instance_model_type_error(self):
         models = ['invalid type']
@@ -194,8 +197,9 @@ class ModelRunTest(unittest.TestCase):
             'id': 1,
             'data_provider': 'arome_metcoop_2500m',
             'reference_time': '2015-01-19T16:04:40+0000',
+            'created_date': '2015-01-19T16:04:40+0000',
+            'data': [],
             'version': 1337,
-            'data': []
             }
 
     def test_initialize_with_invalid_reference_time(self):
@@ -211,6 +215,35 @@ class ModelRunTest(unittest.TestCase):
         self.assertIsInstance(model_run.reference_time, datetime.datetime)
         self.assertIsInstance(model_run.version, int)
 
+
+class ZeroMQTest(unittest.TestCase):
+    """
+    Tests the ZeroMQ classes
+    """
+    def setUp(self):
+        self.zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
+
+    def test_decode_event_ok(self):
+        string = 'foo 123'
+        event = self.zmq.decode_event(string)
+        self.assertEqual(event.resource, 'foo')
+        self.assertEqual(event.id, 123)
+
+    def test_decode_event_invalid_id(self):
+        string = 'foo bar'
+        event = self.zmq.decode_event(string)
+        self.assertIsNone(event)
+
+    def test_decode_event_invalid_format(self):
+        string = 'foobar'
+        event = self.zmq.decode_event(string)
+        self.assertIsNone(event)
+
+    def test_zmqevent_class(self):
+        event = syncer.zeromq.ZMQEvent(id=123, resource='foo', bar='baz')
+        self.assertEqual(event.bar, 'baz')
+        self.assertEqual(event.resource, 'foo')
+        self.assertEqual(event.id, 123)
 
 if __name__ == '__main__':
     unittest.main()
