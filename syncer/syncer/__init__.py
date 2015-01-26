@@ -7,6 +7,8 @@ import requests
 import argparse
 import ConfigParser
 import time
+import re
+import subprocess
 
 import syncer.rest
 
@@ -55,6 +57,87 @@ class Configuration:
     def get(self, section, key):
         return self.config_parser.get(section, key)
 
+    def section_keys(self, section_name):
+        return [x[0] for x in self.config_parser.items(section_name)]
+
+    def section_options(self, section_name):
+        return dict(self.config_parser.items(section_name))
+
+class WDB:
+
+    def __init__(self, host, user):
+        self.host = host
+        self.user = user
+        
+
+    def load_model_run(self, model, model_run):
+        """Load a model_run."""
+
+        data_uri_pattern = model.data_uri_pattern
+
+        for data in model_run.data:              
+            data_uri = data.href
+            
+            if re.search(data_uri_pattern, data_uri) is not None:
+                
+                modelfile = WDB.convert_opdata_uri_to_file(data_uri)
+                self.load_modelfile(model, modelfile)
+
+
+    def load_modelfile(self, model, modelfile):
+        """Load a modelfile into wdb host"""
+
+        load_cmd = WDB.create_load_command(model, modelfile)
+        cmd = self.create_ssh_command(load_cmd)
+
+        try:
+            exit_code, stdout, stderr = WDB.execute_command(cmd)
+
+        except subprocess.CalledProcessError, e:
+            raise syncer.exceptions.WDBLoadException("Load command not found: %s" % e)
+
+    @staticmethod
+    def execute_command(cmd):      
+
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        res = process.communicate()
+        exit_code = process.wait()
+
+        return exit_code, res[0], res[1]
+
+    @staticmethod
+    def create_load_command(model, modelfile):
+
+        cmd = [model.load_program, '--dataprovider', model.data_provider]
+
+        if hasattr(model, 'load_config'):
+            cmd.extend(['-c', model.load_config])
+ 
+        if hasattr(model, 'place_name'):
+            cmd.extend(["--placename", model.place_name])
+        else:
+            cmd.extend(["--loadPlaceDefinition"])
+        
+        cmd.append(modelfile)
+        
+        return cmd
+
+    def create_ssh_command(self, cmd):
+        return ["ssh", "{0}@{1}".format(self.user, self.host)] + cmd
+
+    @staticmethod
+    def convert_opdata_uri_to_file(data_uri):
+        """Convert an opdata uri to a file name with full path."""
+
+        # uri must start with opdata:/// ( and max 3 '/' )
+        if re.match('opdata\:\/{3}(?!\/)', data_uri) is None:
+            raise syncer.exceptions.OpdataURIException(
+                "The uri {0} is not correctly formatted".format(data_uri)) 
+
+        data_file_path = re.sub(r'^opdata\:\/\/\/', '/opdata/', data_uri)
+
+        return data_file_path
+
 
 class Model:
     def __init__(self, data):
@@ -64,9 +147,18 @@ class Model:
 
     @staticmethod
     def data_from_config_section(config, section_name):
+        """Return config options for a model. Raise exception if mandatory config option is missing"""
+      
         data = {}
-        for key in ['data_provider']:
-            data[key] = config.get(section_name, key)
+        mandatory_options = ['data_provider', 'data_uri_pattern', 'load_program', 'load_config']
+
+        section_keys = config.section_keys(section_name)
+        for option in mandatory_options:
+            if not option in section_keys:
+                raise ConfigParser.NoOptionError(option, section_name)
+
+        data = config.section_options(section_name)
+
         return data
 
     def set_current_model_run(self, model_run):
@@ -80,10 +172,11 @@ class Model:
 
 
 class Daemon:
-    def __init__(self, config, models, model_run_collection):
+    def __init__(self, config, models, model_run_collection, wdb):
         self.config = config
         self.models = models
         self.model_run_collection = model_run_collection
+        self.wdb = wdb
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -95,6 +188,7 @@ class Daemon:
         num_models = len(self.models)
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
+
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -125,6 +219,18 @@ class Daemon:
         except syncer.exceptions.RESTException, e:
             logging.error("REST API threw up with an exception: %s" % e)
 
+        
+    def load_model(self, model):
+
+        try:
+            self.wdb.load_model_run(model, model.current_model_run)
+                                                                
+        except syncer.exceptions.WDBLoadException, e:
+            logging.error("Failed to load model into wdb: %s" % e)              
+        except syncer.exceptions.OpdataURIException, e:
+            logging.critical("Failed to load some model data due to erroneous opdata uri: %s" % e)
+                              
+
     def main_loop_inner(self):
         """Workhorse of the main loop"""
         for model in self.models:
@@ -133,7 +239,9 @@ class Daemon:
             if not model.current_model_run_initialized:
                 logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
                 self.get_latest_model_run(model)
-
+                self.load_model(model)
+                
+                
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""
         logging.info("Daemon started.")
@@ -181,6 +289,12 @@ def run(argv):
         logging.critical("Could not read logging configuration file: %s" % unicode(e))
         return EXIT_LOGGING
 
+    try:
+        wdb = WDB(config.get('wdb','host'), config.get('wdb','ssh_user'))
+    except ConfigParser.NoOptionError, e:
+        logging.critical("Missing configuration for wdb host")
+        return EXIT_CONFIG
+        
     # Start main application
     logging.info("Syncer is started")
     model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
@@ -188,7 +302,8 @@ def run(argv):
     base_url = config.get('webservice', 'url')
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
-    daemon = Daemon(config, models, model_run_collection)
+
+    daemon = Daemon(config, models, model_run_collection, wdb)
     exit_code = daemon.run()
 
     return exit_code

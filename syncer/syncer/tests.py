@@ -14,9 +14,13 @@ import syncer.exceptions
 config_file_contents = """
 [wdb]
 host=127.0.0.1
+ssh_user=wdb
 
 [model_foo]
 data_provider=bar
+data_uri_pattern=(foo|bar??)
+load_program=netcdfLoad
+load_config=/etc/netcdfload/arome.config
 
 [model_bar]
 shizzle=foo
@@ -59,6 +63,59 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(args.config, '/dev/null')
 
 
+class WDBTest(unittest.TestCase):
+    VALID_MODEL_FIXTURE = {
+            'data_provider': 'arome_metcoop_2500m',
+            'data_uri_pattern': '(foo|bar??)',
+            'load_program':'netcdfLoad',
+            'load_config': '/etc/netcdfload/arome.config'
+            }
+
+    VALID_MODEL_RUN_FIXTURE = {
+            'id': 1,
+            'data_provider': 'arome_metcoop_2500m',
+            'reference_time': '2015-01-19T16:04:40+0000',
+            'version': 1337,
+            'data': [
+                {
+                    'model_run':'/modelstatus/v0/model_run/1',
+                    'id': '/modelstatus/v0/data1',
+                    'format': 'netcdf4',
+                    'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
+                    'created_time': '2015-01-12T08:36:03Z'
+                }
+            ]
+            }
+
+    def setUp(self):
+        self.wdb = syncer.WDB('localhost', 'test')
+        self.model = syncer.Model(self.VALID_MODEL_FIXTURE)
+        self.model_run = syncer.rest.ModelRun(self.VALID_MODEL_RUN_FIXTURE)
+
+    def test_create_ssh_command(self):
+        cmd = self.wdb.create_ssh_command(['ls'])
+
+        self.assertEqual(" ".join(cmd), 'ssh test@localhost ls')
+
+    def test_execute_command(self):
+        results = syncer.WDB.execute_command('/bin/false')
+
+        self.assertEqual(results[0], 1)
+
+    def test_create_load_command(self):
+        cmd = syncer.WDB.create_load_command(
+            self.model, 
+            '/opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc'
+            )
+        self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider arome_metcoop_2500m -c /etc/netcdfload/arome.config --loadPlaceDefinition /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc" )
+
+
+    def test_convert_opdata_uri_to_file(self):
+        
+        filepath = syncer.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
+        
+        self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
+
 class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'
 
@@ -78,29 +135,37 @@ class CollectionTest(unittest.TestCase):
         self.assertEqual(self.store.unserialize(json_string), json_data)
 
 
+
 class DaemonTest(unittest.TestCase):
+
+    def setUp(self):
+        config_file = StringIO.StringIO(config_file_contents)
+        self.config = syncer.Configuration()
+        self.config.load(config_file)
+        self.wdb = syncer.WDB(self.config.get('wdb', 'host'), self.config.get('wdb','ssh_user'))
+        
     def test_instance(self):
-        config = syncer.Configuration()
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
-        daemon = syncer.Daemon(config, models, model_run_collection)
+        daemon = syncer.Daemon(self.config, models, model_run_collection, self.wdb)
 
     def test_instance_model_type_error(self):
-        config = syncer.Configuration()
         models = ['invalid type']
         with self.assertRaises(TypeError):
-            daemon = syncer.Daemon(config, models)
+            daemon = syncer.Daemon(self.config, models)
 
     def test_instance_model_class_error(self):
-        config = syncer.Configuration()
         models = set([object()])
         with self.assertRaises(TypeError):
-            daemon = syncer.Daemon(config, models)
+            daemon = syncer.Daemon(self.config, models)
 
 
 class ModelTest(unittest.TestCase):
     VALID_FIXTURE = {
-            'data_provider': 'bar'
+            'data_provider': 'bar',
+            'data_uri_pattern': '(foo|bar??)',
+            'load_program':'netcdfLoad',
+            'load_config': '/etc/netcdfload/arome.config'
             }
 
     def setUp(self):
@@ -130,6 +195,7 @@ class ModelRunTest(unittest.TestCase):
             'data_provider': 'arome_metcoop_2500m',
             'reference_time': '2015-01-19T16:04:40+0000',
             'version': 1337,
+            'data': []
             }
 
     def test_initialize_with_invalid_reference_time(self):

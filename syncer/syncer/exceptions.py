@@ -21,3 +21,11 @@ class UnserializeException(RESTException):
 class InvalidResourceException(RESTException):
     """Thrown when the server returns an invalid resource."""
     pass
+
+class WDBLoadException(Exception):
+    """Thrown when a load program failed to load model data into wdb."""
+    pass
+
+class OpdataURIException(Exception):
+    """Thrown when the uri given is not a correct opdata uri."""
+    pass

@@ -43,11 +43,12 @@ class BaseResource(object):
 
 
 class ModelRun(BaseResource):
-    required_parameters = ['id', 'data_provider', 'reference_time', 'version']
+    required_parameters = ['id', 'data_provider', 'reference_time', 'version', 'data']
 
     def initialize(self):
         self.reference_time = dateutil.parser.parse(self.reference_time)
-
+        self.data = [Data(x) for x in self.data]
+        
     def __repr__(self):
         return "ModelRun id=%d data_provider=%s reference_time=%s version=%d" % \
             (self.id, self.data_provider, self.reference_time.strftime('%s'), self.version)
@@ -55,6 +56,7 @@ class ModelRun(BaseResource):
 
 class Data(BaseResource):
     pass
+    
 
 
 class BaseCollection(object):
@@ -70,12 +72,16 @@ class BaseCollection(object):
 
     def _get_request(self, *args, **kwargs):
         """Wrapper for self.session.get with exception handling"""
-        request = self.session.get(*args, **kwargs)
-        if request.status_code >= 500:
-            raise syncer.exceptions.RESTServiceUnavailableException("Server returned error code %d" % request.status_code)
-        elif request.status_code >= 400:
-            raise syncer.exceptions.RESTServiceClientErrorException("Server returned error code %d" % request.status_code)
-        return request
+        response = self.session.get(*args, **kwargs)
+
+        if response.status_code >= 500:
+            raise syncer.exceptions.RESTServiceUnavailableException(
+                "Server returned error code %d for request uri %s " % (response.status_code, response.request.url))
+        elif response.status_code >= 400:
+            raise syncer.exceptions.RESTServiceClientErrorException(
+                "Server returned error code %d for request %s " % (response.status_code, response.request.url))
+
+        return response
 
     def get_collection_url(self):
         """Return the URL for the resource collection"""
