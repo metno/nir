@@ -1,4 +1,5 @@
 import datetime
+import dateutil.parser
 import falcon
 import falcon.testing
 import unittest
@@ -68,6 +69,10 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         body_content = self.decode_body(body)
         self.assertEqual(len(body_content), 2)
         self.assertEqual(body_content[0]['id'], 1)
+        try:
+            dateutil.parser.parse(body_content[0]['created_date'])
+        except ValueError:
+            self.fail("created_date does not parse as a datetime object")        
 
     def test_get_full_filters(self):
         """

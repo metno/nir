@@ -23,6 +23,15 @@ class SerializeBase(object):
             elif hasattr(serialized[key], 'serialize'):
                 serialized[key] = serialized[key].serialize()
         return serialized
+    
+    def _serialize_datetime(self, value):
+        """
+        The database should save everything in UTC, but not all databases
+        support time zones. This function ensures that a time zone-aware object
+        is returned.
+        """
+        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
+        return utc_time.isoformat()    
 
 
 class ModelRun(Base, SerializeBase):
@@ -35,17 +44,9 @@ class ModelRun(Base, SerializeBase):
     data_provider = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     version = sqlalchemy.Column(sqlalchemy.Integer)
     created_date = sqlalchemy.Column(sqlalchemy.DateTime(timezone=True),
+                                     nullable=False,
                                      default=datetime.datetime.utcnow)
     __table_args__ = (sqlalchemy.UniqueConstraint('data_provider', 'reference_time', 'version'),)
-
-    def _serialize_datetime(self, value):
-        """
-        The database should save everything in UTC, but not all databases
-        support time zones. This function ensures that a time zone-aware object
-        is returned.
-        """
-        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
-        return utc_time.isoformat()
 
     def serialize_reference_time(self, value):
         return self._serialize_datetime(value)
@@ -59,13 +60,19 @@ class ModelRun(Base, SerializeBase):
 
 class Data(Base, SerializeBase):
     __tablename__ = 'data'
-    __serializable__ = ['id', 'href', 'format', 'model_run_id']
+    __serializable__ = ['id', 'href', 'format', 'model_run_id', 'created_time']
 
     id = sqlalchemy.Column(sqlalchemy.Integer, primary_key=True)
     href = sqlalchemy.Column(sqlalchemy.String, nullable=False)
     format = sqlalchemy.Column(sqlalchemy.String(64), nullable=False)
     model_run_id = sqlalchemy.Column(sqlalchemy.Integer, sqlalchemy.ForeignKey('model_run.id'), nullable=False)
     model_run = sqlalchemy.orm.relationship(ModelRun, backref='data')
+    created_time = sqlalchemy.Column(sqlalchemy.DateTime(timezone=True),
+                                     nullable=False,
+                                     default=datetime.datetime.utcnow)
+
+    def serialize_created_time(self, value):
+        return self._serialize_datetime(value)
 
 
 def get_sqlite_memory_session():
