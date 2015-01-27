@@ -133,9 +133,9 @@ class BaseCollectionResource(BaseResource):
         Run all filters through filtering functions.
         """
         if not 'order_by' in filters:
-            filters['order_by'] = ''
+            filters['order_by'] = 'id:desc'
         if not 'limit' in filters:
-            filters['limit'] = None
+            filters['limit'] = 10
 
         return self.normalize_attributes(filters)
 
