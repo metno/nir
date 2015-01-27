@@ -32,6 +32,9 @@ class SerializeBase(object):
         utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
         return utc_time.isoformat()    
 
+    def __repr__(self):
+        return "<%s id=%s>" % (self.__tablename__, self.id)
+
 
 class ModelRun(Base, SerializeBase):
     __tablename__ = 'model_run'

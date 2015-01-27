@@ -1,3 +1,4 @@
+import logging
 import falcon
 import falcon.util.uri
 import sqlalchemy.exc
@@ -11,8 +12,7 @@ class BaseResource(object):
     Parent class of all API resources.
     """
 
-    def __init__(self, api_base_url, logger, orm, zeromq):
-        self.logger = logger
+    def __init__(self, api_base_url, orm, zeromq):
         self.api_base_url = api_base_url
         self.orm = orm
         self.zeromq = zeromq
@@ -58,6 +58,7 @@ class BaseCollectionResource(BaseResource):
             orm_resource = self.orm_class(**norm_doc)
 
         except (TypeError, ValueError, AttributeError), e:
+            logging.warning("Resource instantiation failed due to bad input data: %s" % unicode(e))
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', unicode(e))
 
         # add the resource to the transaction manager
@@ -66,8 +67,11 @@ class BaseCollectionResource(BaseResource):
         # commit the resource
         try:
             self.orm.commit()
+            logging.debug("Resource successfully committed to database: %s" % unicode(orm_resource))
+
         except sqlalchemy.exc.IntegrityError, e:
             self.orm.rollback()
+            logging.warning("Database transaction failed due to bad input data: %s" % unicode(e))
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid data in request', unicode(e))
 
         # Here, we are guaranteed to have an object.

@@ -25,42 +25,44 @@ EXIT_LOGGING = 2
 def setup_logger(config_file):
     logging.config.fileConfig(config_file, disable_existing_loggers=True)
 
-    return logging.getLogger()
-
 def parse_arguments(args):
-
     args_parser = argparse.ArgumentParser()
-    args_parser.add_argument('-c', '--config', help="path to config file", 
-                               default=DEFAULT_CONFIG_PATH)
-
+    args_parser.add_argument('-c', '--config', help="path to config file", default=DEFAULT_CONFIG_PATH)
     return args_parser.parse_args(args)
 
-
-def start_api(logger, config_parser):
+def start_api(config_parser):
     """Instantiate api, add all resources and routes and return application object."""
 
     zmq_socket = config_parser.get('zeromq', 'socket')
     database_uri = config_parser.get('database', 'uri')
     api_base_url = '/modelstatus/v0'
     application = falcon.API()
+
+    # connect to database
+    logging.info("Connecting to database backend...")
     orm_session = modelstatus.orm.get_database_session(database_uri)
+
+    # instantiate ZeroMQ publisher
+    logging.info("Publishing ZeroMQ events on socket %s" % zmq_socket)
     zeromq = modelstatus.zeromq.ZMQPublisher(zmq_socket)
 
-    helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, orm_session, zeromq)
-
-    modelrun_collection = modelstatus.api.modelrun.CollectionResource(api_base_url, logger, orm_session, zeromq)
-    modelrun_item = modelstatus.api.modelrun.ItemResource(api_base_url, logger, orm_session, zeromq)
-
-    data_collection = modelstatus.api.data.CollectionResource(api_base_url, logger, orm_session, zeromq)
-    data_item = modelstatus.api.data.ItemResource(api_base_url, logger, orm_session, zeromq)
-
+    # instantiate resources - the API end point, where the application logic happens
+    common_args = (api_base_url, orm_session, zeromq)
+    helloworld = modelstatus.api.helloworld.HelloWorldResource(*common_args)
+    modelrun_collection = modelstatus.api.modelrun.CollectionResource(*common_args)
+    modelrun_item = modelstatus.api.modelrun.ItemResource(*common_args)
+    data_collection = modelstatus.api.data.CollectionResource(*common_args)
+    data_item = modelstatus.api.data.ItemResource(*common_args)
     
+    # set up routes
     application.add_route(api_base_url + '/helloworld', helloworld)
     application.add_route(api_base_url + '/model_run', modelrun_collection)
     application.add_route(api_base_url + '/model_run/{id}', modelrun_item)
     application.add_route(api_base_url + '/data', data_collection)
     application.add_route(api_base_url + '/data/{id}', data_item)
 
+    # WSGI application object
+    logging.info("Modelstatus startup complete, ready to serve requests.")
     return application
 
 
@@ -73,17 +75,21 @@ def main():
     config_file = args.config
 
     try:
-        logger = setup_logger(config_file)
+        setup_logger(config_file)
 
     except (ConfigParser.NoSectionError, IOError) as e:
         logging.critical("There is an error in the logging configuration: %s" 
                          % unicode(e))
         sys.exit(EXIT_LOGGING) 
 
+    logging.info("Modelstatus REST API server starting.")
+
     config_parser = ConfigParser.SafeConfigParser()
     config_parser.read(config_file)
 
-    return start_api(logger, config_parser)
+    logging.info("Configuration file has been successfully read.")
+
+    return start_api(config_parser)
 
 if __name__ == '__main__':
 
