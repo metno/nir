@@ -8,6 +8,8 @@ import zmq
 import modelstatus.tests
 import modelstatus.orm
 import modelstatus.zeromq
+import modelstatus.tests.test_utils
+
 
 class TestZmq(modelstatus.tests.test_utils.TestBase):
 
