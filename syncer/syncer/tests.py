@@ -117,6 +117,12 @@ class WDBTest(unittest.TestCase):
         
         self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
 
+    def test_load_modelfile(self):
+
+        with self.assertRaises(syncer.exceptions.WDBLoadFailed):
+            self.wdb.load_modelfile(self.model, self.model_run)
+
+
 class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'
 
@@ -155,12 +161,12 @@ class DaemonTest(unittest.TestCase):
     def test_instance_model_type_error(self):
         models = ['invalid type']
         with self.assertRaises(TypeError):
-            daemon = syncer.Daemon(self.config, models)
+            syncer.Daemon(self.config, models)
 
     def test_instance_model_class_error(self):
         models = set([object()])
         with self.assertRaises(TypeError):
-            daemon = syncer.Daemon(self.config, models)
+            syncer.Daemon(self.config, models)
 
 
 class ModelTest(unittest.TestCase):

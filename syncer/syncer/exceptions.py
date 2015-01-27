@@ -22,7 +22,7 @@ class InvalidResourceException(RESTException):
     """Thrown when the server returns an invalid resource."""
     pass
 
-class WDBLoadException(Exception):
+class WDBLoadFailed(Exception):
     """Thrown when a load program failed to load model data into wdb."""
     pass
 

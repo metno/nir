@@ -72,7 +72,7 @@ class WDB:
         self.user = user
 
     def load_model_run(self, model, model_run):
-        """Load a model_run."""
+        """Load into wdb all relevant data from a model_run."""
 
         data_uri_pattern = model.data_uri_pattern
 
@@ -85,28 +85,44 @@ class WDB:
                 self.load_modelfile(model, modelfile)
 
     def load_modelfile(self, model, modelfile):
-        """Load a modelfile into wdb host"""
+        """Load a modelfile into wdb."""
 
         load_cmd = WDB.create_load_command(model, modelfile)
         cmd = self.create_ssh_command(load_cmd)
 
         try:
-            exit_code, stdout, stderr = WDB.execute_command(cmd)
+            exit_code, stderr, stdout = WDB.execute_command(cmd)
+        except TypeError, e:
+            raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
-        except subprocess.CalledProcessError, e:
-            raise syncer.exceptions.WDBLoadException("Load command not found: %s" % e)
+
+        if stderr is not None:
+            logging.error("WDB load error: Command %s returned with errors. All error messages will follow:" % 
+                          " ".join(cmd))
+            for line in stderr.splitlines():
+                logging.error("WDB load error: " + line)
+
+        if exit_code > 0:
+
+            raise syncer.exceptions.WDBLoadFailed("WDB load command %s failed, with exit code %s. See logs for more information." % (" ".join(cmd), exit_code))
 
     @staticmethod
     def execute_command(cmd):      
+        """Executes a shell command.
 
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        res = process.communicate()
-        exit_code = process.wait()
+        cmd: A command represented by a list of arguments.
+        Returns three values: exit_code(int), stderr(string) and stdout(string).
+        """
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+        stdout, stderr = process.communicate()
+        exit_code = process.returncode
 
-        return exit_code, res[0], res[1]
+        return exit_code, stderr, stdout
 
     @staticmethod
     def create_load_command(model, modelfile):
+        """Generate a wdb load command for a specific model and modelfile, based on info from config."""
 
         cmd = [model.load_program, '--dataprovider', model.data_provider]
 
@@ -244,9 +260,9 @@ class Daemon:
 
         try:
             self.wdb.load_model_run(model, model.current_model_run)
-                                                                
-        except syncer.exceptions.WDBLoadException, e:
-            logging.error("Failed to load model into wdb: %s" % e)              
+
+        except syncer.exceptions.WDBLoadFailed, e:
+            logging.critical("WDB load failed: %s" % e)              
         except syncer.exceptions.OpdataURIException, e:
             logging.critical("Failed to load some model data due to erroneous opdata uri: %s" % e)
                               
@@ -282,8 +298,6 @@ class Daemon:
 
         logging.info("Daemon is terminating.")
         return EXIT_SUCCESS
-
-
 
 
 def setup_logging(config_file):
