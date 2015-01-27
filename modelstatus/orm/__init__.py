@@ -3,7 +3,6 @@ import sqlalchemy.ext.declarative
 import sqlalchemy.orm
 import sqlalchemy.engine
 import sqlalchemy.event
-import sqlalchemy
 import datetime
 import dateutil.tz
 
@@ -76,15 +75,24 @@ class Data(Base, SerializeBase):
 
 
 def get_sqlite_memory_session():
-    engine = sqlalchemy.engine.create_engine('sqlite://')
+    return get_database_session('sqlite://')
+
+def get_database_session(connection_uri):
+    """
+    Create the session from an uri. If the engine created use the sqlite dialect
+    then setup to use specific sqlite configuration on each connection. 
+    """
+    engine = sqlalchemy.engine.create_engine(connection_uri)
+    if engine.name == "sqlite":
+        sqlalchemy.event.listen(sqlalchemy.engine.Engine, "connect", set_sqlite_pragma)
     DBSession = sqlalchemy.orm.sessionmaker(bind=engine)
     session = DBSession()
     Base.metadata.create_all(engine)
     return session
 
+
 # enable foreign key constraints for sqlite backends
 # http://docs.sqlalchemy.org/en/rel_0_9/dialects/sqlite.html#foreign-key-support
-@sqlalchemy.event.listens_for(sqlalchemy.engine.Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")

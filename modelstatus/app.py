@@ -40,9 +40,10 @@ def start_api(logger, config_parser):
     """Instantiate api, add all resources and routes and return application object."""
 
     zmq_socket = config_parser.get('zeromq', 'socket')
+    database_uri = config_parser.get('database', 'uri')
     api_base_url = '/modelstatus/v0'
     application = falcon.API()
-    orm_session = modelstatus.orm.get_sqlite_memory_session()
+    orm_session = modelstatus.orm.get_database_session(database_uri)
     zeromq = modelstatus.zeromq.ZMQPublisher(zmq_socket)
 
     helloworld = modelstatus.api.helloworld.HelloWorldResource(api_base_url, logger, orm_session, zeromq)
