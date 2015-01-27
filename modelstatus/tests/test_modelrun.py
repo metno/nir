@@ -67,7 +67,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         body = self.simulate_request(self.url, method='GET')
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
-        self.assertEqual(len(body_content), 2)
+        self.assertEqual(len(body_content), 4)
         self.assertEqual(body_content[0]['id'], 1)
         try:
             dateutil.parser.parse(body_content[0]['created_date'])
@@ -84,6 +84,27 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
         self.assertEqual(len(body_content), 1)
+        self.assertEqual(body_content[0]['id'], 2)
+        self.assertEqual(body_content[0]['version'], 2)
+
+    def test_order_by_desc(self):
+        """
+        Test that order by desc works
+        """
+        query_string = "order_by=id:desc"
+        body = self.simulate_request(self.url, method='GET', query_string=query_string)
+        self.assertEqual(self.srmock.status, falcon.HTTP_200)
+        body_content = self.decode_body(body)
+        self.assertEqual(body_content[0]['id'], 4)
+
+    def test_order_by_asc(self):
+        """
+        Test that order by asc works
+        """
+        query_string = "order_by=version:asc"
+        body = self.simulate_request(self.url, method='GET', query_string=query_string)
+        self.assertEqual(self.srmock.status, falcon.HTTP_200)
+        body_content = self.decode_body(body)
         self.assertEqual(body_content[0]['id'], 1)
 
     def test_get_negative_limit(self):

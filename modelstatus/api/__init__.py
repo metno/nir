@@ -171,21 +171,20 @@ class BaseCollectionResource(BaseResource):
         """
         order_by = value.split(',')
         order_list = []
-
         # work with 'field:direction' pairs
-        if len(order_list) > 0:
-            for o in order_by:
-                try:
-                    (key, order) = o.lower().split(':')
-                except ValueError:
-                    raise ValueError("order declaration must be in the form <field>:<direction>")
+        for o in order_by:
+            if not o:
+                continue
+            try:
+                (key, order) = o.lower().split(':')
+            except ValueError:
+                raise ValueError("order declaration must be in the form <field>:<direction>")
 
-                # input validation
-                if not order == 'asc' and not order == 'desc':
-                    raise ValueError("order parameter must be one of 'asc' or 'desc'")
-
-                order_list.append((key, order))
-
+            # input validation
+            if not order == 'asc' and not order == 'desc':
+                raise ValueError("order parameter must be one of 'asc' or 'desc'")
+            
+            order_list.append((key, order))
         return order_list
 
 

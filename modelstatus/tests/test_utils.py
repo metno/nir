@@ -38,21 +38,21 @@ class TestBase(falcon.testing.TestBase):
 
     def setup_database_fixture(self):
         for model in ['arome25', 'ecdet']:
-            for i in xrange(1, 2):
+            for i in xrange(1, 3):
                 model_run = modelstatus.orm.ModelRun(
                     reference_time=datetime.datetime.utcfromtimestamp(0),
                     data_provider=model,
                     version=i
                 )
-                data = modelstatus.orm.Data(
-                    model_run=model_run,
-                    format='netcdf4',
-                    href='/dev/null'
-                )
+                for j in xrange(1, 3):
+                    data = modelstatus.orm.Data(
+                        model_run=model_run,
+                        format='netcdf4',
+                        href='/dev/null'
+                    )
                 self.orm.add(model_run)
                 self.orm.add(data)
         self.orm.commit()
-
     def decode_body(self, body):
         return json.loads(body[0])
 

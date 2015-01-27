@@ -1,8 +1,5 @@
 #!/usr/bin/env python2.7
 
-import falcon
-import json
-
 import modelstatus.utils
 import modelstatus.api
 import modelstatus.orm

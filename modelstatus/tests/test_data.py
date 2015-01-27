@@ -41,7 +41,7 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
         body = self.simulate_request(self.url, method='GET')
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
-        self.assertEqual(len(body_content), 2)
+        self.assertEqual(len(body_content), 8)
         self.assertEqual(body_content[0]['model_run_id'], 1)
         self.assertEqual(body_content[0]['href'], "/dev/null")
         self.assertEqual(body_content[0]['id'], 1)
@@ -50,10 +50,11 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
             dateutil.parser.parse(body_content[0]['created_time'])
         except ValueError:
             self.fail("created_time does not parse as a datetime object")        
-        self.assertEqual(body_content[1]['model_run_id'], 2)
+        self.assertEqual(body_content[1]['model_run_id'], 1)
         self.assertEqual(body_content[1]['href'], "/dev/null")
         self.assertEqual(body_content[1]['id'], 2)
         self.assertEqual(body_content[1]['format'], "netcdf4")
+
         try:
             dateutil.parser.parse(body_content[1]['created_time'])
         except ValueError:
