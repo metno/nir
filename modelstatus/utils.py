@@ -3,6 +3,7 @@
 import json
 import falcon
 
+
 def deserialize(req, resp, params):
     """Convert a JSON string into a Python dictionary"""
 

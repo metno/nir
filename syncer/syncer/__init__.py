@@ -3,7 +3,6 @@
 import logging
 import logging.config
 import sys
-import requests
 import argparse
 import ConfigParser
 import time
@@ -64,7 +63,7 @@ class Configuration:
     def section_options(self, section_name):
         return dict(self.config_parser.items(section_name))
 
-        
+
 class WDB:
 
     def __init__(self, host, user):
@@ -76,11 +75,11 @@ class WDB:
 
         data_uri_pattern = model.data_uri_pattern
 
-        for data in model_run.data:              
+        for data in model_run.data:
             data_uri = data.href
-            
+
             if re.search(data_uri_pattern, data_uri) is not None:
-                
+
                 modelfile = WDB.convert_opdata_uri_to_file(data_uri)
                 self.load_modelfile(model, modelfile)
 
@@ -95,9 +94,8 @@ class WDB:
         except TypeError, e:
             raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
-
         if stderr is not None:
-            logging.error("WDB load error: Command %s returned with errors. All error messages will follow:" % 
+            logging.error("WDB load error: Command %s returned with errors. All error messages will follow:" %
                           " ".join(cmd))
             for line in stderr.splitlines():
                 logging.error("WDB load error: " + line)
@@ -107,14 +105,14 @@ class WDB:
             raise syncer.exceptions.WDBLoadFailed("WDB load command %s failed, with exit code %s. See logs for more information." % (" ".join(cmd), exit_code))
 
     @staticmethod
-    def execute_command(cmd):      
+    def execute_command(cmd):
         """Executes a shell command.
 
         cmd: A command represented by a list of arguments.
         Returns three values: exit_code(int), stderr(string) and stdout(string).
         """
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
+
         stdout, stderr = process.communicate()
         exit_code = process.returncode
 
@@ -128,14 +126,14 @@ class WDB:
 
         if hasattr(model, 'load_config'):
             cmd.extend(['-c', model.load_config])
- 
+
         if hasattr(model, 'place_name'):
             cmd.extend(["--placename", model.place_name])
         else:
             cmd.extend(["--loadPlaceDefinition"])
-        
+
         cmd.append(modelfile)
-        
+
         return cmd
 
     def create_ssh_command(self, cmd):
@@ -148,7 +146,7 @@ class WDB:
         # uri must start with opdata:/// ( and max 3 '/' )
         if re.match('opdata\:\/{3}(?!\/)', data_uri) is None:
             raise syncer.exceptions.OpdataURIException(
-                "The uri {0} is not correctly formatted".format(data_uri)) 
+                "The uri {0} is not correctly formatted".format(data_uri))
 
         data_file_path = re.sub(r'^opdata\:\/\/\/', '/opdata/', data_uri)
 
@@ -164,13 +162,13 @@ class Model:
     @staticmethod
     def data_from_config_section(config, section_name):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
-      
+
         data = {}
         mandatory_options = ['data_provider', 'data_uri_pattern', 'load_program', 'load_config']
 
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
-            if not option in section_keys:
+            if option not in section_keys:
                 raise ConfigParser.NoOptionError(option, section_name)
 
         data = config.section_options(section_name)
@@ -179,7 +177,7 @@ class Model:
 
     def set_current_model_run(self, model_run):
         if model_run is not None and not isinstance(model_run, syncer.rest.BaseResource):
-            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % __func__)
+            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % self.__func__)
         self.current_model_run = model_run
         self.current_model_run_initialized = True
         logging.info("Model %s has new model run: %s" % (self, self.current_model_run))
@@ -206,7 +204,7 @@ class Daemon:
         logging.info("Daemon initialized with the following model configuration:")
         num_models = len(self.models)
         for num, model in enumerate(self.models):
-            logging.info(" %2d of %2d: %s" % (num_models, num+1, model.data_provider))
+            logging.info(" %2d of %2d: %s" % (num_models, num + 1, model.data_provider))
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -255,17 +253,17 @@ class Daemon:
                 return
 
         logging.info("No models configured to handle this event; no action taken.")
-        
+
     def load_model(self, model):
 
         try:
             self.wdb.load_model_run(model, model.current_model_run)
 
         except syncer.exceptions.WDBLoadFailed, e:
-            logging.critical("WDB load failed: %s" % e)              
+            logging.critical("WDB load failed: %s" % e)
         except syncer.exceptions.OpdataURIException, e:
             logging.critical("Failed to load some model data due to erroneous opdata uri: %s" % e)
-                              
+
     def main_loop_inner(self):
         """Workhorse of the main loop"""
         for model in self.models:
@@ -334,7 +332,7 @@ def run(argv):
     except ConfigParser.NoOptionError, e:
         logging.critical("Missing configuration for WDB host")
         return EXIT_CONFIG
-        
+
     # Start main application
     logging.info("Syncer is started")
     model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])

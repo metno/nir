@@ -2,7 +2,6 @@
 Tests for the ZeroMQ implementation.
 """
 
-import unittest
 import zmq
 
 import modelstatus.tests

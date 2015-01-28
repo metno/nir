@@ -39,8 +39,8 @@ class CollectionResource(BaseResource, modelstatus.api.BaseCollectionResource):
             query = self.orm.query(self.orm_class)
             query = query.filter(self.orm_class.reference_time == norm_doc['reference_time'],
                                  self.orm_class.data_provider == norm_doc['data_provider']) \
-                                 .order_by(self.orm_class.version.desc()) \
-                                 .limit(1)
+                         .order_by(self.orm_class.version.desc()) \
+                         .limit(1)
 
         except KeyError, e:
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', "Missing attribute %s" % unicode(e))
@@ -53,7 +53,8 @@ class CollectionResource(BaseResource, modelstatus.api.BaseCollectionResource):
         else:
             doc['version'] = 1
 
-        self._on_post(req, resp, doc) # actually create the resource
+        # actually create the resource
+        self._on_post(req, resp, doc)
 
 
 class ItemResource(BaseResource, modelstatus.api.BaseItemResource):

@@ -7,6 +7,7 @@ import sqlalchemy.orm.exc
 import modelstatus.utils
 import modelstatus.zeromq
 
+
 class BaseResource(object):
     """
     Parent class of all API resources.
@@ -132,9 +133,9 @@ class BaseCollectionResource(BaseResource):
         """
         Run all filters through filtering functions.
         """
-        if not 'order_by' in filters:
+        if 'order_by' not in filters:
             filters['order_by'] = 'id:desc'
-        if not 'limit' in filters:
+        if 'limit' not in filters:
             filters['limit'] = 10
 
         return self.normalize_attributes(filters)
@@ -187,7 +188,7 @@ class BaseCollectionResource(BaseResource):
             # input validation
             if not order == 'asc' and not order == 'desc':
                 raise ValueError("order parameter must be one of 'asc' or 'desc'")
-            
+
             order_list.append((key, order))
         return order_list
 

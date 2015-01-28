@@ -3,7 +3,6 @@ The REST module defines all classes used to interface against the modelstatus
 REST API service.
 """
 
-import datetime
 import requests
 import json
 import logging
@@ -159,14 +158,14 @@ class ModelRunCollection(BaseCollection):
     def get_latest(self, data_provider):
         """Returns the latest model run from the specified data_provider."""
         order_by = [
-                'reference_time:desc',
-                'version:desc',
-                ]
+            'reference_time:desc',
+            'version:desc',
+        ]
         params = {
-                'data_provider': data_provider,
-                'order_by': ':'.join(order_by),
-                'limit': 1,
-                }
+            'data_provider': data_provider,
+            'order_by': ':'.join(order_by),
+            'limit': 1,
+        }
         return self.filter(**params)
 
 

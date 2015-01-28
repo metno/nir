@@ -7,6 +7,7 @@ Modelstatus runs a ZMQ publisher that notifies clients about interesting data se
 import zmq
 import logging
 
+
 class ZMQPublisher(object):
     def __init__(self, addr):
         self.context = zmq.Context.instance()

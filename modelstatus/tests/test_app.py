@@ -35,6 +35,7 @@ handlers=stdout,syslog
 qualname=syncer
 """
 
+
 class TestApp(unittest.TestCase):
 
     def setUp(self):
@@ -42,15 +43,11 @@ class TestApp(unittest.TestCase):
 
     def test_setup_logger(self):
         logger = modelstatus.app.setup_logger(self.config_file)
-        
         self.assertEqual(logger.__class__.__name__, 'RootLogger')
 
-
     def test_parse_arguments(self):
-
         args = modelstatus.app.parse_arguments(['--config', '/dev/null'])
         self.assertEqual(args.config, '/dev/null')
-
 
 
 if __name__ == '__main__':

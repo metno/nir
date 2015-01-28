@@ -8,6 +8,7 @@ import dateutil.tz
 
 Base = sqlalchemy.ext.declarative.declarative_base()
 
+
 class SerializeBase(object):
     __serializable__ = []
 
@@ -22,7 +23,7 @@ class SerializeBase(object):
             elif hasattr(serialized[key], 'serialize'):
                 serialized[key] = serialized[key].serialize()
         return serialized
-    
+
     def _serialize_datetime(self, value):
         """
         The database should save everything in UTC, but not all databases
@@ -30,7 +31,7 @@ class SerializeBase(object):
         is returned.
         """
         utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
-        return utc_time.isoformat()    
+        return utc_time.isoformat()
 
     def __repr__(self):
         return "<%s id=%s>" % (self.__tablename__, self.id)
@@ -80,10 +81,11 @@ class Data(Base, SerializeBase):
 def get_sqlite_memory_session():
     return get_database_session('sqlite://')
 
+
 def get_database_session(connection_uri):
     """
     Create the session from an uri. If the engine created use the sqlite dialect
-    then setup to use specific sqlite configuration on each connection. 
+    then setup to use specific sqlite configuration on each connection.
     """
     engine = sqlalchemy.engine.create_engine(connection_uri)
     if engine.name == "sqlite":

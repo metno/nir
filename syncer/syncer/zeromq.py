@@ -51,8 +51,8 @@ class ZMQSubscriber(object):
         except:
             return None
         event_dict = {
-                'id': id,
-                'resource': resource
-                }
+            'id': id,
+            'resource': resource
+        }
         event = ZMQEvent(**event_dict)
         return event

@@ -30,6 +30,7 @@ handlers=
 
 base_api_url = '/modelstatus/v0'
 
+
 class TestBase(falcon.testing.TestBase):
 
     def setup_zmq(self):
@@ -53,16 +54,16 @@ class TestBase(falcon.testing.TestBase):
                 self.orm.add(model_run)
                 self.orm.add(data)
         self.orm.commit()
+
     def decode_body(self, body):
         return json.loads(body[0])
-
-
 
 
 def get_test_logger():
     config_file = StringIO.StringIO(config_file_contents)
     logging.config.fileConfig(config_file, disable_existing_loggers=True)
     return logging.getLogger()
+
 
 def get_api_base_url():
     return base_api_url

@@ -1,7 +1,5 @@
 # coding: utf-8
 
-import logging
-import argparse
 import unittest
 import ConfigParser
 import StringIO
@@ -41,6 +39,7 @@ keys=root
 handlers=
 """
 
+
 class SyncerTest(unittest.TestCase):
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
@@ -65,28 +64,28 @@ class ConfigurationTest(unittest.TestCase):
 
 class WDBTest(unittest.TestCase):
     VALID_MODEL_FIXTURE = {
-            'data_provider': 'arome_metcoop_2500m',
-            'data_uri_pattern': '(foo|bar??)',
-            'load_program':'netcdfLoad',
-            'load_config': '/etc/netcdfload/arome.config'
-            }
+        'data_provider': 'arome_metcoop_2500m',
+        'data_uri_pattern': '(foo|bar??)',
+        'load_program': 'netcdfLoad',
+        'load_config': '/etc/netcdfload/arome.config'
+    }
 
     VALID_MODEL_RUN_FIXTURE = {
-            'id': 1,
-            'data_provider': 'arome_metcoop_2500m',
-            'reference_time': '2015-01-19T16:04:40+0000',
-            'created_date': '2015-01-19T16:04:40+0000',
-            'version': 1337,
-            'data': [
-                {
-                    'model_run_id': 1,
-                    'id': '/modelstatus/v0/data1',
-                    'format': 'netcdf4',
-                    'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
-                    'created_time': '2015-01-12T08:36:03Z'
-                }
-            ]
-        }
+        'id': 1,
+        'data_provider': 'arome_metcoop_2500m',
+        'reference_time': '2015-01-19T16:04:40+0000',
+        'created_date': '2015-01-19T16:04:40+0000',
+        'version': 1337,
+        'data': [
+            {
+                'model_run_id': 1,
+                'id': '/modelstatus/v0/data1',
+                'format': 'netcdf4',
+                'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
+                'created_time': '2015-01-12T08:36:03Z'
+            }
+        ]
+    }
 
     def setUp(self):
         self.wdb = syncer.WDB('localhost', 'test')
@@ -105,20 +104,16 @@ class WDBTest(unittest.TestCase):
 
     def test_create_load_command(self):
         cmd = syncer.WDB.create_load_command(
-            self.model, 
+            self.model,
             '/opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc'
-            )
-        self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider arome_metcoop_2500m -c /etc/netcdfload/arome.config --loadPlaceDefinition /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc" )
-
+        )
+        self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider arome_metcoop_2500m -c /etc/netcdfload/arome.config --loadPlaceDefinition /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc")
 
     def test_convert_opdata_uri_to_file(self):
-        
         filepath = syncer.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
-        
         self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
 
     def test_load_modelfile(self):
-
         with self.assertRaises(syncer.exceptions.WDBLoadFailed):
             self.wdb.load_modelfile(self.model, self.model_run)
 
@@ -142,21 +137,20 @@ class CollectionTest(unittest.TestCase):
         self.assertEqual(self.store.unserialize(json_string), json_data)
 
 
-
 class DaemonTest(unittest.TestCase):
 
     def setUp(self):
         config_file = StringIO.StringIO(config_file_contents)
         self.config = syncer.Configuration()
         self.config.load(config_file)
-        self.wdb = syncer.WDB(self.config.get('wdb', 'host'), self.config.get('wdb','ssh_user'))
-        
+        self.wdb = syncer.WDB(self.config.get('wdb', 'host'), self.config.get('wdb', 'ssh_user'))
+
     def test_instance(self):
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         data_collection = syncer.rest.DataCollection('http://localhost', True)
         zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
-        daemon = syncer.Daemon(self.config, models, zmq, self.wdb, model_run_collection, data_collection)
+        syncer.Daemon(self.config, models, zmq, self.wdb, model_run_collection, data_collection)
 
     def test_instance_model_type_error(self):
         models = ['invalid type']
@@ -171,11 +165,11 @@ class DaemonTest(unittest.TestCase):
 
 class ModelTest(unittest.TestCase):
     VALID_FIXTURE = {
-            'data_provider': 'bar',
-            'data_uri_pattern': '(foo|bar??)',
-            'load_program':'netcdfLoad',
-            'load_config': '/etc/netcdfload/arome.config'
-            }
+        'data_provider': 'bar',
+        'data_uri_pattern': '(foo|bar??)',
+        'load_program': 'netcdfLoad',
+        'load_config': '/etc/netcdfload/arome.config'
+    }
 
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
@@ -200,19 +194,19 @@ class ModelRunTest(unittest.TestCase):
     """Tests the syncer.rest.ModelRun resource"""
 
     VALID_FIXTURE = {
-            'id': 1,
-            'data_provider': 'arome_metcoop_2500m',
-            'reference_time': '2015-01-19T16:04:40+0000',
-            'created_date': '2015-01-19T16:04:40+0000',
-            'data': [],
-            'version': 1337,
-            }
+        'id': 1,
+        'data_provider': 'arome_metcoop_2500m',
+        'reference_time': '2015-01-19T16:04:40+0000',
+        'created_date': '2015-01-19T16:04:40+0000',
+        'data': [],
+        'version': 1337,
+    }
 
     def test_initialize_with_invalid_reference_time(self):
         invalid_fixture = self.VALID_FIXTURE
         invalid_fixture['reference_time'] = 'in a galaxy far, far away'
         with self.assertRaises(ValueError):
-            model_run = syncer.rest.ModelRun(invalid_fixture)
+            syncer.rest.ModelRun(invalid_fixture)
 
     def test_initialize_with_correct_data(self):
         model_run = syncer.rest.ModelRun(self.VALID_FIXTURE)

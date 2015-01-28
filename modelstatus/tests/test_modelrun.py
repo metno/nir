@@ -1,4 +1,3 @@
-import datetime
 import dateutil.parser
 import falcon
 import falcon.testing
@@ -32,12 +31,12 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         while making a POST request.
         """
         self.doc['id'] = 42
-        body = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
+        self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
         self.assertEqual(self.srmock.status, falcon.HTTP_400)
 
     def test_post_fails_on_version(self):
         self.doc['id'] = 1
-        body = self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
+        self.simulate_request(self.url, method='POST', body=json.dumps(self.doc))
         self.assertEqual(self.srmock.status, falcon.HTTP_400)
 
     def test_post_status_code(self):
@@ -72,7 +71,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         try:
             dateutil.parser.parse(body_content[0]['created_date'])
         except ValueError:
-            self.fail("created_date does not parse as a datetime object")        
+            self.fail("created_date does not parse as a datetime object")
 
     def test_get_full_filters(self):
         """
@@ -126,6 +125,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         second_body = json.loads(second[0])
         self.assertTrue(first_body['version'] < second_body['version'])
 
+
 class TestModelRunItemResource(modelstatus.tests.test_utils.TestBase):
 
     def before(self):
@@ -150,6 +150,7 @@ class TestModelRunItemResource(modelstatus.tests.test_utils.TestBase):
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
         self.assertEqual(body_content['id'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()
