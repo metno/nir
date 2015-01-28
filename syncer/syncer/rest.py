@@ -163,7 +163,7 @@ class ModelRunCollection(BaseCollection):
         ]
         params = {
             'data_provider': data_provider,
-            'order_by': ':'.join(order_by),
+            'order_by': ','.join(order_by),
             'limit': 1,
         }
         return self.filter(**params)

@@ -73,21 +73,29 @@ class WDB:
     def load_model_run(self, model, model_run):
         """Load into wdb all relevant data from a model_run."""
 
+        logging.info("Starting loading to WDB: %s" % model_run)
+
         data_uri_pattern = model.data_uri_pattern
 
         for data in model_run.data:
             data_uri = data.href
 
             if re.search(data_uri_pattern, data_uri) is not None:
-
+                logging.info("Data URI '%s' matches regular expression '%s'" % (data_uri, data_uri_pattern))
                 modelfile = WDB.convert_opdata_uri_to_file(data_uri)
                 self.load_modelfile(model, modelfile)
+
+        logging.info("Successfully finished loading to WDB." % model_run)
 
     def load_modelfile(self, model, modelfile):
         """Load a modelfile into wdb."""
 
+        logging.info("Loading file %s" % modelfile)
+
         load_cmd = WDB.create_load_command(model, modelfile)
         cmd = self.create_ssh_command(load_cmd)
+
+        logging.debug("Load command: %s" % cmd)
 
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
@@ -95,14 +103,14 @@ class WDB:
             raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
         if stderr is not None:
-            logging.error("WDB load error: Command %s returned with errors. All error messages will follow:" %
-                          " ".join(cmd))
+            logging.warning("WDB load might have failed due to the following messages in stderr:")
             for line in stderr.splitlines():
-                logging.error("WDB load error: " + line)
+                logging.warning("WDB load error: " + line)
 
         if exit_code > 0:
+            raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
 
-            raise syncer.exceptions.WDBLoadFailed("WDB load command %s failed, with exit code %s. See logs for more information." % (" ".join(cmd), exit_code))
+        logging.info("Loading completed.")
 
     @staticmethod
     def execute_command(cmd):
@@ -156,8 +164,13 @@ class WDB:
 class Model:
     def __init__(self, data):
         [setattr(self, key, value) for key, value in data.iteritems()]
+
+        # Most recent model run according to web service
         self.current_model_run = None
         self.current_model_run_initialized = False
+
+        # Model run loaded into WDB
+        self.wdb_model_run = None
 
     @staticmethod
     def data_from_config_section(config, section_name):
@@ -175,12 +188,25 @@ class Model:
 
         return data
 
-    def set_current_model_run(self, model_run):
+    def _validate_model_run(self, model_run):
         if model_run is not None and not isinstance(model_run, syncer.rest.BaseResource):
-            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % self.__func__)
+            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % sys._getframe().f_code.co_name)
+
+    def set_current_model_run(self, model_run):
+        self._validate_model_run(model_run)
         self.current_model_run = model_run
         self.current_model_run_initialized = True
         logging.info("Model %s has new model run: %s" % (self, self.current_model_run))
+
+    def set_wdb_model_run(self, model_run):
+        self._validate_model_run(model_run)
+        self.wdb_model_run = model_run
+        logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.current_model_run))
+
+    def has_pending_model_run(self):
+        if self.current_model_run_initialized:
+            return self.wdb_model_run != self.current_model_run
+        return False
 
     def __repr__(self):
         return self.data_provider
@@ -255,24 +281,20 @@ class Daemon:
         logging.info("No models configured to handle this event; no action taken.")
 
     def load_model(self, model):
-
+        """
+        Load the latest model run of a certain model into WDB
+        """
         try:
             self.wdb.load_model_run(model, model.current_model_run)
+            model.set_wdb_model_run(model.current_model_run)
 
         except syncer.exceptions.WDBLoadFailed, e:
-            logging.critical("WDB load failed: %s" % e)
+            logging.error("WDB load failed: %s" % e)
         except syncer.exceptions.OpdataURIException, e:
-            logging.critical("Failed to load some model data due to erroneous opdata uri: %s" % e)
+            logging.error("Failed to load some model data due to erroneous opdata uri: %s" % e)
 
     def main_loop_inner(self):
         """Workhorse of the main loop"""
-        for model in self.models:
-
-            # Try to initialize all un-initialized models with current model run status
-            if not model.current_model_run_initialized:
-                logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
-                self.get_latest_model_run(model)
-                self.load_model(model)
 
         # Check if we've got something from the Modelstatus ZeroMQ publisher
         zmq_event = self.zmq.get_event()
@@ -281,6 +303,18 @@ class Daemon:
                 self.handle_zmq_event(zmq_event)
             except syncer.exceptions.RESTException, e:
                 logging.error("Server returned invalid resource: %s" % e)
+
+        # Try to initialize all un-initialized models with current model run status
+        for model in self.models:
+            if not model.current_model_run_initialized:
+                logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
+                self.get_latest_model_run(model)
+
+        # Loop through models and see which are not loaded yet
+        for model in self.models:
+            if model.has_pending_model_run():
+                logging.info("Model %s has a pending model run not yet loaded into WDB." % model)
+                self.load_model(model)
 
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""
