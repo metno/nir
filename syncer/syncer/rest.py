@@ -75,8 +75,13 @@ class BaseCollection(object):
         self.verify_ssl = verify_ssl
 
     def _get_request(self, *args, **kwargs):
-        """Wrapper for self.session.get with exception handling"""
-        response = self.session.get(*args, **kwargs)
+        """
+        Wrapper for self.session.get with exception handling
+        """
+        try:
+            response = self.session.get(*args, **kwargs)
+        except requests.exceptions.ConnectionError, e:
+            raise syncer.exceptions.RESTServiceUnavailableException("Could not connect: %s" % unicode(e))
 
         if response.status_code >= 500:
             raise syncer.exceptions.RESTServiceUnavailableException(

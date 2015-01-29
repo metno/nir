@@ -6,11 +6,9 @@ import sys
 import argparse
 import ConfigParser
 import time
-import re
-import subprocess
-import lxml.etree
-import requests
 
+import syncer.wdb
+import syncer.wdb2ts
 import syncer.rest
 import syncer.zeromq
 
@@ -64,190 +62,6 @@ class Configuration:
 
     def section_options(self, section_name):
         return dict(self.config_parser.items(section_name))
-
-
-class WDB2TS(object):
-
-    def __init__(self, base_url, services):
-        self.base_url = base_url
-        self.session = requests.Session()
-        self.status = dict.fromkeys(services, {})
-
-    def request_status(self, service):
-        """
-        Request wdb2ts host for status for specified service and return xml.
-        """
-        status_url = "%s/%s?status" % (self.base_url, service)
-        status_xml = self._get_request(status_url)
-
-        # Validate xml
-        try:
-            tree = lxml.etree.fromstring(status_xml)
-        except lxml.etree.XMLSyntaxError, e:
-            raise syncer.exceptions.WDB2TSMissingContentException("Could not parse xml content from request %: %s."
-                                                                  % (status_url, e))
-        else:
-            if not tree.xpath('boolean(/status)'):
-                raise syncer.exceptions.WDB2TSMissingContentException(
-                    "Content from status request %s is missing its /status element." % status_url)
-
-        return status_xml
-
-    def _get_request(self, url):
-        """
-        Wrapper for self.session.get with exception handling. Returns body of response.
-        """
-        try:
-            response = self.session.get(url)
-        except requests.ConnectionError, e:
-            raise syncer.exceptions.WDB2TSRequestFailedException("WDB2TS request %s got connection refused: %s"
-                                                                 % (url, e))
-
-        if response.status_code >= 500:
-            raise syncer.exceptions.WDB2TSServiceUnavailableException(
-                "WDB2TS returned error code %d for request uri %s " % (response.status_code, response.request.url))
-        elif response.status_code >= 400:
-            raise syncer.exceptions.WDB2TSServiceClientErrorException(
-                "WDB2TS returned error code %d for request %s " % (response.status_code, response.request.url))
-
-        return response.content
-
-    def load_status(self):
-        """
-        Set status dict for all defined services.
-        """
-        for service in self.status.keys():
-            logging.info("Load status information from wdb2ts %s for service %s." %
-                         (self.base_url, service))
-            status_xml = self.request_status(service)
-
-            self.set_status_for_service(status_xml)
-
-        return self.status
-
-    def set_status_for_service(self, service, status_xml):
-        """
-        Set status dict based on values from status_xml. Return status for the service.
-        """
-        if self.status[service] is None:
-            self.status[service]['data_providers'] = ()
-
-        self.status[service]['data_providers'] = WDB2TS.data_providers_from_status_response(status_xml)
-
-        if len(self.status[service]['data_providers']) == 0:
-            logging.warn("WDB2TS data providers for service %s set to empty list." % service)
-
-        return self.status[service]
-
-    @staticmethod
-    def data_providers_from_status_response(status_xml):
-        """
-        Get all defined data_providers from status_xml.
-        """
-        tree = lxml.etree.fromstring(status_xml)
-        provider_elements = tree.xpath('/status/defined_dataproviders/dataprovider/name')
-
-        return [e.text for e in provider_elements]
-
-    def __repr__(self):
-        return "WDB2TS(%s, %s)" % (self.base_url, ",".join(self.status.keys()))
-
-
-class WDB(object):
-
-    def __init__(self, host, user):
-        self.host = host
-        self.user = user
-
-    def load_model_run(self, model, model_run):
-        """Load into wdb all relevant data from a model_run."""
-
-        logging.info("Starting loading to WDB: %s" % model_run)
-
-        data_uri_pattern = model.data_uri_pattern
-
-        for data in model_run.data:
-            data_uri = data.href
-
-            if re.search(data_uri_pattern, data_uri) is not None:
-                logging.info("Data URI '%s' matches regular expression '%s'" % (data_uri, data_uri_pattern))
-                modelfile = WDB.convert_opdata_uri_to_file(data_uri)
-                self.load_modelfile(model, modelfile)
-
-        logging.info("Successfully finished loading to WDB." % model_run)
-
-    def load_modelfile(self, model, modelfile):
-        """Load a modelfile into wdb."""
-
-        logging.info("Loading file %s" % modelfile)
-
-        load_cmd = WDB.create_load_command(model, modelfile)
-        cmd = self.create_ssh_command(load_cmd)
-
-        logging.debug("Load command: %s" % cmd)
-
-        try:
-            exit_code, stderr, stdout = WDB.execute_command(cmd)
-        except TypeError, e:
-            raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
-
-        if stderr is not None:
-            logging.warning("WDB load might have failed due to the following messages in stderr:")
-            for line in stderr.splitlines():
-                logging.warning("WDB load error: " + line)
-
-        if exit_code > 0:
-            raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
-
-        logging.info("Loading completed.")
-
-    @staticmethod
-    def execute_command(cmd):
-        """Executes a shell command.
-
-        cmd: A command represented by a list of arguments.
-        Returns three values: exit_code(int), stderr(string) and stdout(string).
-        """
-        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        stdout, stderr = process.communicate()
-        exit_code = process.returncode
-
-        return exit_code, stderr, stdout
-
-    @staticmethod
-    def create_load_command(model, modelfile):
-        """Generate a wdb load command for a specific model and modelfile, based on info from config."""
-
-        cmd = [model.load_program, '--dataprovider', model.data_provider]
-
-        if hasattr(model, 'load_config'):
-            cmd.extend(['-c', model.load_config])
-
-        if hasattr(model, 'place_name'):
-            cmd.extend(["--placename", model.place_name])
-        else:
-            cmd.extend(["--loadPlaceDefinition"])
-
-        cmd.append(modelfile)
-
-        return cmd
-
-    def create_ssh_command(self, cmd):
-        return ["ssh", "{0}@{1}".format(self.user, self.host)] + cmd
-
-    @staticmethod
-    def convert_opdata_uri_to_file(data_uri):
-        """Convert an opdata uri to a file name with full path."""
-
-        # uri must start with opdata:/// ( and max 3 '/' )
-        if re.match('opdata\:\/{3}(?!\/)', data_uri) is None:
-            raise syncer.exceptions.OpdataURIException(
-                "The uri {0} is not correctly formatted".format(data_uri))
-
-        data_file_path = re.sub(r'^opdata\:\/\/\/', '/opdata/', data_uri)
-
-        return data_file_path
 
 
 class Model:
@@ -452,11 +266,11 @@ def run(argv):
         return EXIT_LOGGING
 
     try:
-        wdb = WDB(config.get('wdb', 'host'), config.get('wdb', 'ssh_user'))
+        wdb = syncer.wdb.WDB(config.get('wdb', 'host'), config.get('wdb', 'ssh_user'))
 
         # Get all wdb2ts services from comma separated list in config
         wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
-        wdb2ts = WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
+        wdb2ts = syncer.wdb2ts.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
     except ConfigParser.NoOptionError, e:
         logging.critical("Missing configuration for WDB host")
         return EXIT_CONFIG

@@ -6,6 +6,8 @@ import StringIO
 import datetime
 
 import syncer
+import syncer.wdb
+import syncer.wdb2ts
 import syncer.rest
 import syncer.exceptions
 
@@ -97,7 +99,7 @@ class WDB2TS(unittest.TestCase):
         config = syncer.Configuration()
         config.load(config_file)
         wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
-        self.wdb2ts = syncer.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
+        self.wdb2ts = syncer.wdb2ts.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
 
     def test_request_status(self):
 
@@ -109,7 +111,7 @@ class WDB2TS(unittest.TestCase):
             self.wdb2ts._get_request('http://test/testing')
 
     def test_data_providers_from_status_response(self):
-        providers = syncer.WDB2TS.data_providers_from_status_response(WDB2TS.VALID_STATUS_XML)
+        providers = syncer.wdb2ts.WDB2TS.data_providers_from_status_response(WDB2TS.VALID_STATUS_XML)
 
         self.assertIn('arome_metcoop_2500m', providers)
 
@@ -146,7 +148,7 @@ class WDBTest(unittest.TestCase):
     }
 
     def setUp(self):
-        self.wdb = syncer.WDB('localhost', 'test')
+        self.wdb = syncer.wdb.WDB('localhost', 'test')
         self.model = syncer.Model(self.VALID_MODEL_FIXTURE)
         self.model_run = syncer.rest.ModelRun(self.VALID_MODEL_RUN_FIXTURE)
 
@@ -156,19 +158,19 @@ class WDBTest(unittest.TestCase):
         self.assertEqual(" ".join(cmd), 'ssh test@localhost ls')
 
     def test_execute_command(self):
-        results = syncer.WDB.execute_command('/bin/false')
+        results = syncer.wdb.WDB.execute_command('/bin/false')
 
         self.assertEqual(results[0], 1)
 
     def test_create_load_command(self):
-        cmd = syncer.WDB.create_load_command(
+        cmd = syncer.wdb.WDB.create_load_command(
             self.model,
             '/opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc'
         )
         self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider arome_metcoop_2500m -c /etc/netcdfload/arome.config --loadPlaceDefinition /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc")
 
     def test_convert_opdata_uri_to_file(self):
-        filepath = syncer.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
+        filepath = syncer.wdb.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
         self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
 
     def test_load_modelfile(self):
@@ -201,10 +203,10 @@ class DaemonTest(unittest.TestCase):
         config_file = StringIO.StringIO(config_file_contents)
         self.config = syncer.Configuration()
         self.config.load(config_file)
-        self.wdb = syncer.WDB(self.config.get('wdb', 'host'), self.config.get('wdb', 'ssh_user'))
+        self.wdb = syncer.wdb.WDB(self.config.get('wdb', 'host'), self.config.get('wdb', 'ssh_user'))
 
         wdb2ts_services = [s.strip() for s in self.config.get('wdb2ts', 'services')]
-        self.wdb2ts = syncer.WDB2TS(self.config.get('wdb2ts', 'base_url'), wdb2ts_services)
+        self.wdb2ts = syncer.wdb2ts.WDB2TS(self.config.get('wdb2ts', 'base_url'), wdb2ts_services)
 
     def test_instance(self):
         models = set()
