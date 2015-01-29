@@ -69,11 +69,14 @@ class Model:
         [setattr(self, key, value) for key, value in data.iteritems()]
 
         # Most recent model run according to web service
-        self.current_model_run = None
-        self.current_model_run_initialized = False
+        self.available_model_run = None
+        self._available_model_run_initialized = False
 
         # Model run loaded into WDB
         self.wdb_model_run = None
+
+        # Model run used to update WDB2TS
+        self.wdb2ts_model_run = None
 
     @staticmethod
     def data_from_config_section(config, section_name):
@@ -92,24 +95,58 @@ class Model:
         return data
 
     def _validate_model_run(self, model_run):
+        """
+        Check that `model_run` is of the correct type.
+        """
         if model_run is not None and not isinstance(model_run, syncer.rest.BaseResource):
             raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % sys._getframe().f_code.co_name)
 
-    def set_current_model_run(self, model_run):
+    def set_available_model_run(self, model_run):
+        """
+        Update `self.available_model_run` with the most recent model run,
+        usually from the REST API service.
+        """
         self._validate_model_run(model_run)
-        self.current_model_run = model_run
-        self.current_model_run_initialized = True
-        logging.info("Model %s has new model run: %s" % (self, self.current_model_run))
+        self.available_model_run = model_run
+        self._available_model_run_initialized = True
+        if self.available_model_run:
+            logging.info("Model %s has new model run: %s" % (self, self.available_model_run))
+
+    def model_run_initialized(self):
+        """
+        Return True if this Model has a ModelRun available.
+        """
+        return self._available_model_run_initialized is True
 
     def set_wdb_model_run(self, model_run):
+        """
+        Update `self.wdb_model_run` with the model run that has been loaded into WDB.
+        """
         self._validate_model_run(model_run)
         self.wdb_model_run = model_run
-        logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.current_model_run))
+        logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.wdb_model_run))
 
-    def has_pending_model_run(self):
-        if self.current_model_run_initialized:
-            return self.wdb_model_run != self.current_model_run
+    def set_wdb2ts_model_run(self, model_run):
+        """
+        Update `self.wdb2ts_model_run` with the model run that has been used to update WDB2TS.
+        """
+        self._validate_model_run(model_run)
+        self.wdb2ts_model_run = model_run
+        logging.info("Model %s has been updated in WDB2TS, model run: %s" % (self, self.wdb2ts_model_run))
+
+    def has_pending_wdb_load(self):
+        """
+        Returns True if the available model run has not been loaded into WDB yet.
+        """
+        if self.model_run_initialized():
+            return self.wdb_model_run != self.available_model_run
         return False
+
+    def has_pending_wdb2ts_update(self):
+        """
+        Returns True if the model run loaded into WDB has not been used to update WDB2TS yet.
+        """
+        return self.wdb_model_run != self.wdb2ts_model_run
 
     def __repr__(self):
         return self.data_provider
@@ -150,7 +187,7 @@ class Daemon:
             if len(latest) == 0:
                 logging.info("REST API does not contain any recorded model runs.")
                 logging.warn("Syncer will not query for model runs again until restarted, or notified by publisher.")
-                model.set_current_model_run(None)
+                model.set_available_model_run(None)
 
             # More than one result, this is a server error and should not happen
             elif len(latest) > 1:
@@ -158,7 +195,7 @@ class Daemon:
 
             # Valid result
             else:
-                model.set_current_model_run(latest[0])
+                model.set_available_model_run(latest[0])
 
         # Server threw an error, recover from that
         except syncer.exceptions.RESTException, e:
@@ -179,7 +216,7 @@ class Daemon:
 
         for model in self.models:
             if model.data_provider == model_run_object.data_provider:
-                model.set_current_model_run(model_run_object)
+                model.set_available_model_run(model_run_object)
                 return
 
         logging.info("No models configured to handle this event; no action taken.")
@@ -189,16 +226,30 @@ class Daemon:
         Load the latest model run of a certain model into WDB
         """
         try:
-            self.wdb.load_model_run(model, model.current_model_run)
-            model.set_wdb_model_run(model.current_model_run)
+            self.wdb.load_model_run(model, model.available_model_run)
+            model.set_wdb_model_run(model.available_model_run)
 
         except syncer.exceptions.WDBLoadFailed, e:
             logging.error("WDB load failed: %s" % e)
         except syncer.exceptions.OpdataURIException, e:
             logging.error("Failed to load some model data due to erroneous opdata uri: %s" % e)
 
+    def update_wdb2ts(self, model):
+        """
+        Update WDB2TS with new model information.
+        """
+        try:
+            raise NotImplementedError('stub')
+        except Exception, e:
+            logging.error("Failed to update WDB2TS: %s" % unicode(e))
+
     def main_loop_inner(self):
-        """Workhorse of the main loop"""
+        """
+        This function is a single iteration in the main loop.
+        It checks for ZeroMQ messages, downloads model run information from the
+        Modelstatus REST API service, loads data into WDB, and updates WDB2TS
+        if applicable.
+        """
 
         # Check if we've got something from the Modelstatus ZeroMQ publisher
         zmq_event = self.zmq.get_event()
@@ -210,15 +261,21 @@ class Daemon:
 
         # Try to initialize all un-initialized models with current model run status
         for model in self.models:
-            if not model.current_model_run_initialized:
+            if not model.model_run_initialized():
                 logging.info("Model %s does not have any information about model runs, initializing from API..." % model)
                 self.get_latest_model_run(model)
 
-        # Loop through models and see which are not loaded yet
+        # Loop through models and see which are not loaded into WDB yet
         for model in self.models:
-            if model.has_pending_model_run():
+            if model.has_pending_wdb_load():
                 logging.info("Model %s has a pending model run not yet loaded into WDB." % model)
                 self.load_model(model)
+
+        # Loop through models again, and see which are loaded into WDB but not yet used to update WDB2TS
+        for model in self.models:
+            if model.has_pending_wdb2ts_update():
+                logging.info("Model %s has been loaded into WDB, but WDB2TS has not yet been updated." % model)
+                self.update_wdb2ts(model)
 
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""

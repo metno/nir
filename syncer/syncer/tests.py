@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import copy
 import unittest
 import ConfigParser
 import StringIO
@@ -21,8 +22,8 @@ host=127.0.0.1
 ssh_user=wdb
 
 [model_foo]
-data_provider=bar
-data_uri_pattern=(foo|bar??)
+data_provider=arome_metcoop_2500m
+data_uri_pattern=(arome_metcoop|bar??)
 load_program=netcdfLoad
 load_config=/etc/netcdfload/arome.config
 
@@ -44,6 +45,32 @@ keys=root
 [logger_root]
 handlers=
 """
+
+
+VALID_MODEL_RUN_FIXTURE = {
+    'id': 1,
+    'data_provider': 'arome_metcoop_2500m',
+    'reference_time': '2015-01-19T16:04:40Z',
+    'created_date': '2015-01-19T16:04:40Z',
+    'version': 1337,
+    'data': [
+        {
+            'model_run_id': 1,
+            'id': '/modelstatus/v0/data1',
+            'format': 'netcdf4',
+            'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
+            'created_time': '2015-01-12T08:36:03Z'
+        }
+    ]
+}
+
+
+VALID_MODEL_FIXTURE = {
+    'data_provider': 'arome_metcoop_2500m',
+    'data_uri_pattern': '(arome_metcoop|bar??)',
+    'load_program': 'netcdfLoad',
+    'load_config': '/etc/netcdfload/arome.config'
+}
 
 
 class SyncerTest(unittest.TestCase):
@@ -123,34 +150,11 @@ class WDB2TS(unittest.TestCase):
 
 
 class WDBTest(unittest.TestCase):
-    VALID_MODEL_FIXTURE = {
-        'data_provider': 'arome_metcoop_2500m',
-        'data_uri_pattern': '(foo|bar??)',
-        'load_program': 'netcdfLoad',
-        'load_config': '/etc/netcdfload/arome.config'
-    }
-
-    VALID_MODEL_RUN_FIXTURE = {
-        'id': 1,
-        'data_provider': 'arome_metcoop_2500m',
-        'reference_time': '2015-01-19T16:04:40+0000',
-        'created_date': '2015-01-19T16:04:40+0000',
-        'version': 1337,
-        'data': [
-            {
-                'model_run_id': 1,
-                'id': '/modelstatus/v0/data1',
-                'format': 'netcdf4',
-                'href': 'opdata:///arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc',
-                'created_time': '2015-01-12T08:36:03Z'
-            }
-        ]
-    }
 
     def setUp(self):
         self.wdb = syncer.wdb.WDB('localhost', 'test')
-        self.model = syncer.Model(self.VALID_MODEL_FIXTURE)
-        self.model_run = syncer.rest.ModelRun(self.VALID_MODEL_RUN_FIXTURE)
+        self.model = syncer.Model(VALID_MODEL_FIXTURE)
+        self.model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
 
     def test_create_ssh_command(self):
         cmd = self.wdb.create_ssh_command(['ls'])
@@ -227,52 +231,74 @@ class DaemonTest(unittest.TestCase):
 
 
 class ModelTest(unittest.TestCase):
-    VALID_FIXTURE = {
-        'data_provider': 'bar',
-        'data_uri_pattern': '(foo|bar??)',
-        'load_program': 'netcdfLoad',
-        'load_config': '/etc/netcdfload/arome.config'
-    }
-
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
         self.config = syncer.Configuration()
         self.config.load(self.config_file)
 
+    def get_model(self):
+        return syncer.Model(VALID_MODEL_FIXTURE)
+
+    def get_model_run(self):
+        return syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
+
     def test_data_from_config_section(self):
         data = syncer.Model.data_from_config_section(self.config, 'model_foo')
-        self.assertEqual(data, self.VALID_FIXTURE)
+        self.assertEqual(data, VALID_MODEL_FIXTURE)
 
     def test_instantiate(self):
-        model = syncer.Model(self.VALID_FIXTURE)
-        for key, value in self.VALID_FIXTURE.iteritems():
+        model = self.get_model()
+        for key, value in VALID_MODEL_FIXTURE.iteritems():
             self.assertEqual(getattr(model, key), value)
 
     def test_data_from_config_section_missing_key(self):
         with self.assertRaises(ConfigParser.NoOptionError):
             syncer.Model.data_from_config_section(self.config, 'model_bar')
 
+    def test_set_available_model_run(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.set_available_model_run(model_run)
+        self.assertEqual(model_run, model.available_model_run)
+        self.assertTrue(model.model_run_initialized())
+
+    def test_set_wdb_model_run(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.set_wdb_model_run(model_run)
+        self.assertEqual(model_run, model.wdb_model_run)
+
+    def test_set_wdb2ts_model_run(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.set_wdb2ts_model_run(model_run)
+        self.assertEqual(model_run, model.wdb2ts_model_run)
+
+    def test_set_invalid_data(self):
+        """
+        Test that the various set_ functions only accepts a ModelRun object.
+        """
+        model = self.get_model()
+        model_run = object()
+        with self.assertRaises(TypeError):
+            model.set_available_model_run(model_run)
+        with self.assertRaises(TypeError):
+            model.set_wdb_model_run(model_run)
+        with self.assertRaises(TypeError):
+            model.set_wdb2ts_model_run(model_run)
+
 
 class ModelRunTest(unittest.TestCase):
     """Tests the syncer.rest.ModelRun resource"""
 
-    VALID_FIXTURE = {
-        'id': 1,
-        'data_provider': 'arome_metcoop_2500m',
-        'reference_time': '2015-01-19T16:04:40+0000',
-        'created_date': '2015-01-19T16:04:40+0000',
-        'data': [],
-        'version': 1337,
-    }
-
     def test_initialize_with_invalid_reference_time(self):
-        invalid_fixture = self.VALID_FIXTURE
+        invalid_fixture = copy.deepcopy(VALID_MODEL_RUN_FIXTURE)
         invalid_fixture['reference_time'] = 'in a galaxy far, far away'
         with self.assertRaises(ValueError):
             syncer.rest.ModelRun(invalid_fixture)
 
     def test_initialize_with_correct_data(self):
-        model_run = syncer.rest.ModelRun(self.VALID_FIXTURE)
+        model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
         self.assertIsInstance(model_run.id, int)
         self.assertIsInstance(model_run.data_provider, str)
         self.assertIsInstance(model_run.reference_time, datetime.datetime)
@@ -307,6 +333,7 @@ class ZeroMQTest(unittest.TestCase):
         self.assertEqual(event.bar, 'baz')
         self.assertEqual(event.resource, 'foo')
         self.assertEqual(event.id, 123)
+
 
 if __name__ == '__main__':
     unittest.main()

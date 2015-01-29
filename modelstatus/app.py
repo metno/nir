@@ -13,7 +13,7 @@ import modelstatus.api.helloworld
 import modelstatus.api.modelrun
 import modelstatus.api.data
 
-import wsgiref
+import wsgiref.simple_server
 
 DEFAULT_CONFIG_PATH = '/etc/modelstatus.ini'
 DEFAULT_LOG_LEVEL = 'DEBUG'
