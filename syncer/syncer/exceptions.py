@@ -36,3 +36,23 @@ class WDBLoadFailed(Exception):
 class OpdataURIException(Exception):
     """Thrown when the uri given is not a correct opdata uri."""
     pass
+
+
+class WDB2TSServiceUnavailableException(RESTServiceUnavailableException):
+    """Thrown when wdb2ts returns a 5xx error."""
+    pass
+
+
+class WDB2TSServiceClientErrorException(RESTServiceClientErrorException):
+    """Thrown when wdb2ts returns a 4xx error."""
+    pass
+
+
+class WDB2TSWrongContentException(Exception):
+    """Thrown when a response from wdb2ts returns a content that is not correct"""
+    pass
+
+
+class WDB2TSRequestFailedException(Exception):
+    """Thrown when a requst to wdb2ts failed for some reason"""
+    pass

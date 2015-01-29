@@ -8,6 +8,8 @@ import ConfigParser
 import time
 import re
 import subprocess
+import lxml.etree
+import requests
 
 import syncer.rest
 import syncer.zeromq
@@ -64,7 +66,94 @@ class Configuration:
         return dict(self.config_parser.items(section_name))
 
 
-class WDB:
+class WDB2TS(object):
+
+    def __init__(self, base_url, services):
+        self.base_url = base_url
+        self.session = requests.Session()
+        self.status = dict.fromkeys(services, {})
+
+    def request_status(self, service):
+        """
+        Request wdb2ts host for status for specified service and return xml.
+        """
+        status_url = "%s/%s?status" % (self.base_url, service)
+        status_xml = self._get_request(status_url)
+
+        # Validate xml
+        try:
+            tree = lxml.etree.fromstring(status_xml)
+        except lxml.etree.XMLSyntaxError, e:
+            raise syncer.exceptions.WDB2TSMissingContentException("Could not parse xml content from request %: %s."
+                                                                  % (status_url, e))
+        else:
+            if not tree.xpath('boolean(/status)'):
+                raise syncer.exceptions.WDB2TSMissingContentException(
+                    "Content from status request %s is missing its /status element." % status_url)
+
+        return status_xml
+
+    def _get_request(self, url):
+        """
+        Wrapper for self.session.get with exception handling. Returns body of response.
+        """
+        try:
+            response = self.session.get(url)
+        except requests.ConnectionError, e:
+            raise syncer.exceptions.WDB2TSRequestFailedException("WDB2TS request %s got connection refused: %s"
+                                                                 % (url, e))
+
+        if response.status_code >= 500:
+            raise syncer.exceptions.WDB2TSServiceUnavailableException(
+                "WDB2TS returned error code %d for request uri %s " % (response.status_code, response.request.url))
+        elif response.status_code >= 400:
+            raise syncer.exceptions.WDB2TSServiceClientErrorException(
+                "WDB2TS returned error code %d for request %s " % (response.status_code, response.request.url))
+
+        return response.content
+
+    def load_status(self):
+        """
+        Set status dict for all defined services.
+        """
+        for service in self.status.keys():
+            logging.info("Load status information from wdb2ts %s for service %s." %
+                         (self.base_url, service))
+            status_xml = self.request_status(service)
+
+            self.set_status_for_service(status_xml)
+
+        return self.status
+
+    def set_status_for_service(self, service, status_xml):
+        """
+        Set status dict based on values from status_xml. Return status for the service.
+        """
+        if self.status[service] is None:
+            self.status[service]['data_providers'] = ()
+
+        self.status[service]['data_providers'] = WDB2TS.data_providers_from_status_response(status_xml)
+
+        if len(self.status[service]['data_providers']) == 0:
+            logging.warn("WDB2TS data providers for service %s set to empty list." % service)
+
+        return self.status[service]
+
+    @staticmethod
+    def data_providers_from_status_response(status_xml):
+        """
+        Get all defined data_providers from status_xml.
+        """
+        tree = lxml.etree.fromstring(status_xml)
+        provider_elements = tree.xpath('/status/defined_dataproviders/dataprovider/name')
+
+        return [e.text for e in provider_elements]
+
+    def __repr__(self):
+        return "WDB2TS(%s, %s)" % (self.base_url, ",".join(self.status.keys()))
+
+
+class WDB(object):
 
     def __init__(self, host, user):
         self.host = host
@@ -213,11 +302,12 @@ class Model:
 
 
 class Daemon:
-    def __init__(self, config, models, zmq, wdb, model_run_collection, data_collection):
+    def __init__(self, config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection):
         self.config = config
         self.models = models
         self.zmq = zmq
         self.wdb = wdb
+        self.wdb2ts = wdb2ts
         self.model_run_collection = model_run_collection
         self.data_collection = data_collection
 
@@ -363,6 +453,10 @@ def run(argv):
 
     try:
         wdb = WDB(config.get('wdb', 'host'), config.get('wdb', 'ssh_user'))
+
+        # Get all wdb2ts services from comma separated list in config
+        wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
+        wdb2ts = WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
     except ConfigParser.NoOptionError, e:
         logging.critical("Missing configuration for WDB host")
         return EXIT_CONFIG
@@ -373,12 +467,15 @@ def run(argv):
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
     base_url = config.get('webservice', 'url')
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
+
     zmq_socket = config.get('zeromq', 'socket')
     zmq = syncer.zeromq.ZMQSubscriber(zmq_socket)
+
     logging.info("ZeroMQ subscriber listening for events from %s" % zmq_socket)
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
     data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
-    daemon = Daemon(config, models, zmq, wdb, model_run_collection, data_collection)
+
+    daemon = Daemon(config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection)
     exit_code = daemon.run()
 
     return exit_code

@@ -10,6 +10,10 @@ import syncer.rest
 import syncer.exceptions
 
 config_file_contents = """
+[wdb2ts]
+base_url=http://localhost/metno-wdb2ts
+services=proffecepsforecast,aromeecepsforecast
+
 [wdb]
 host=127.0.0.1
 ssh_user=wdb
@@ -60,6 +64,60 @@ class ConfigurationTest(unittest.TestCase):
     def test_argparse_config(self):
         args = self.config.argument_parser.parse_args(['--config', '/dev/null'])
         self.assertEqual(args.config, '/dev/null')
+
+
+class WDB2TS(unittest.TestCase):
+    VALID_STATUS_XML = """<status>
+<updateid>aromeecepsforecast_1_9</updateid>
+<defined_dataproviders>
+<dataprovider>
+<name>statkart.no</name>
+</dataprovider>
+<dataprovider>
+<name>arome_metcoop_2500m</name>
+</dataprovider>
+<dataprovider>
+<name>arome_metcoop_2500m_temperature_corrected</name>
+</dataprovider>
+<dataprovider>
+<name>proff.default</name>
+</dataprovider>
+<dataprovider>
+<name>met eceps small domain v.1.0</name>
+</dataprovider>
+<dataprovider>
+<name>met eceps large domain v.1.0</name>
+</dataprovider>
+</defined_dataproviders>
+</status>
+"""
+
+    def setUp(self):
+        config_file = StringIO.StringIO(config_file_contents)
+        config = syncer.Configuration()
+        config.load(config_file)
+        wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
+        self.wdb2ts = syncer.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
+
+    def test_request_status(self):
+
+        with self.assertRaises(syncer.exceptions.WDB2TSRequestFailedException):
+            self.wdb2ts.request_status('proffecepsforecast')
+
+    def test_get_request(self):
+        with self.assertRaises(syncer.exceptions.WDB2TSRequestFailedException):
+            self.wdb2ts._get_request('http://test/testing')
+
+    def test_data_providers_from_status_response(self):
+        providers = syncer.WDB2TS.data_providers_from_status_response(WDB2TS.VALID_STATUS_XML)
+
+        self.assertIn('arome_metcoop_2500m', providers)
+
+    def test_set_status_for_service(self):
+
+        status = self.wdb2ts.set_status_for_service('aromeecepsforecast', WDB2TS.VALID_STATUS_XML)
+
+        self.assertIn('arome_metcoop_2500m', status['data_providers'])
 
 
 class WDBTest(unittest.TestCase):
@@ -145,12 +203,15 @@ class DaemonTest(unittest.TestCase):
         self.config.load(config_file)
         self.wdb = syncer.WDB(self.config.get('wdb', 'host'), self.config.get('wdb', 'ssh_user'))
 
+        wdb2ts_services = [s.strip() for s in self.config.get('wdb2ts', 'services')]
+        self.wdb2ts = syncer.WDB2TS(self.config.get('wdb2ts', 'base_url'), wdb2ts_services)
+
     def test_instance(self):
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         data_collection = syncer.rest.DataCollection('http://localhost', True)
         zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
-        syncer.Daemon(self.config, models, zmq, self.wdb, model_run_collection, data_collection)
+        syncer.Daemon(self.config, models, zmq, self.wdb, self.wdb2ts, model_run_collection, data_collection)
 
     def test_instance_model_type_error(self):
         models = ['invalid type']
