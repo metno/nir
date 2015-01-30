@@ -18,7 +18,6 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.url = self.api_base_url + '/data'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource = modelstatus.api.data.CollectionResource(self.api_base_url,
-                                                                modelstatus.tests.test_utils.get_test_logger(),
                                                                 self.orm,
                                                                 self.zmq)
         self.setup_database_fixture()
@@ -42,17 +41,17 @@ class TestDataCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
         self.assertEqual(len(body_content), 8)
-        self.assertEqual(body_content[0]['model_run_id'], 1)
+        self.assertEqual(body_content[0]['model_run_id'], 4)
         self.assertEqual(body_content[0]['href'], "/dev/null")
-        self.assertEqual(body_content[0]['id'], 1)
+        self.assertEqual(body_content[0]['id'], 8)
         self.assertEqual(body_content[0]['format'], "netcdf4")
         try:
             dateutil.parser.parse(body_content[0]['created_time'])
         except ValueError:
             self.fail("created_time does not parse as a datetime object")
-        self.assertEqual(body_content[1]['model_run_id'], 1)
+        self.assertEqual(body_content[1]['model_run_id'], 4)
         self.assertEqual(body_content[1]['href'], "/dev/null")
-        self.assertEqual(body_content[1]['id'], 2)
+        self.assertEqual(body_content[1]['id'], 7)
         self.assertEqual(body_content[1]['format'], "netcdf4")
 
         try:
@@ -88,7 +87,6 @@ class TestDataItemResource(modelstatus.tests.test_utils.TestBase):
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.route = self.api_base_url + '/data/{id}'
         self.resource = modelstatus.api.data.ItemResource(self.api_base_url,
-                                                          modelstatus.tests.test_utils.get_test_logger(),
                                                           self.orm,
                                                           self.zmq)
         self.setup_database_fixture()

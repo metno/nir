@@ -18,7 +18,6 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.url = self.api_base_url + '/model_run'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource = modelstatus.api.modelrun.CollectionResource(self.api_base_url,
-                                                                    modelstatus.tests.test_utils.get_test_logger(),
                                                                     self.orm,
                                                                     self.zmq)
         self.setup_database_fixture()
@@ -67,7 +66,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
         self.assertEqual(len(body_content), 4)
-        self.assertEqual(body_content[0]['id'], 1)
+        self.assertEqual(body_content[0]['id'], 4)
         try:
             dateutil.parser.parse(body_content[0]['created_date'])
         except ValueError:
@@ -136,7 +135,6 @@ class TestModelRunItemResource(modelstatus.tests.test_utils.TestBase):
         self.route = self.api_base_url + '/model_run/{id}'
         self.orm = modelstatus.orm.get_sqlite_memory_session()
         self.resource = modelstatus.api.modelrun.ItemResource(self.api_base_url,
-                                                              modelstatus.tests.test_utils.get_test_logger(),
                                                               self.orm,
                                                               self.zmq)
         self.setup_database_fixture()

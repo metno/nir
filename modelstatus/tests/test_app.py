@@ -41,10 +41,6 @@ class TestApp(unittest.TestCase):
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
 
-    def test_setup_logger(self):
-        logger = modelstatus.app.setup_logger(self.config_file)
-        self.assertEqual(logger.__class__.__name__, 'RootLogger')
-
     def test_parse_arguments(self):
         args = modelstatus.app.parse_arguments(['--config', '/dev/null'])
         self.assertEqual(args.config, '/dev/null')
