@@ -83,7 +83,7 @@ class Model:
         """Return config options for a model. Raise exception if mandatory config option is missing"""
 
         data = {}
-        mandatory_options = ['data_provider', 'data_uri_pattern', 'load_program', 'load_config']
+        mandatory_options = ['data_provider', 'data_uri_pattern', 'load_program']
 
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
@@ -171,7 +171,7 @@ class Daemon:
         logging.info("Daemon initialized with the following model configuration:")
         num_models = len(self.models)
         for num, model in enumerate(self.models):
-            logging.info(" %2d of %2d: %s" % (num_models, num + 1, model.data_provider))
+            logging.info(" %2d of %2d: %s" % (num + 1, num_models, model.data_provider))
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -187,7 +187,7 @@ class Daemon:
             if len(latest) == 0:
                 logging.info("REST API does not contain any recorded model runs.")
                 logging.warn("Syncer will not query for model runs again until restarted, or notified by publisher.")
-                model.set_available_model_run(None)
+                self.set_available_model_run(model, None)
 
             # More than one result, this is a server error and should not happen
             elif len(latest) > 1:
@@ -195,7 +195,7 @@ class Daemon:
 
             # Valid result
             else:
-                model.set_available_model_run(latest[0])
+                self.set_available_model_run(model, latest[0])
 
         # Server threw an error, recover from that
         except syncer.exceptions.RESTException, e:
@@ -216,15 +216,26 @@ class Daemon:
 
         for model in self.models:
             if model.data_provider == model_run_object.data_provider:
-                model.set_available_model_run(model_run_object)
+                self.set_available_model_run(model, model_run_object)
                 return
 
         logging.info("No models configured to handle this event; no action taken.")
+
+    def set_available_model_run(self, model, model_run):
+        """
+        Check if a model run contains data sets, and set it as an available model run
+        """
+        if model_run is not None and len(model_run.data) == 0:
+            logging.warn("Model run contains no data, discarding.")
+            return
+        model.set_available_model_run(model_run)
 
     def load_model(self, model):
         """
         Load the latest model run of a certain model into WDB
         """
+        logging.info("Loading model %s into WDB..." % model)
+
         try:
             self.wdb.load_model_run(model, model.available_model_run)
             model.set_wdb_model_run(model.available_model_run)
@@ -238,9 +249,13 @@ class Daemon:
         """
         Update WDB2TS with new model information.
         """
+        logging.info("Updating model %s in WDB2TS..." % model)
+
         try:
-            raise NotImplementedError('stub')
-        except Exception, e:
+            self.wdb2ts.update_wdb2ts(model, model.wdb_model_run)
+            model.set_wdb2ts_model_run(model.wdb_model_run)
+
+        except syncer.exceptions.WDB2TSServerException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
 
     def main_loop_inner(self):
@@ -268,15 +283,29 @@ class Daemon:
         # Loop through models and see which are not loaded into WDB yet
         for model in self.models:
             if model.has_pending_wdb_load():
-                logging.info("Model %s has a pending model run not yet loaded into WDB." % model)
+                logging.info("Model %s has a new model run, not yet loaded into WDB." % model)
                 self.load_model(model)
-                # TODO: self.wdb2ts.update_wdb2ts(model, model.current_model_run)
 
         # Loop through models again, and see which are loaded into WDB but not yet used to update WDB2TS
+        update_models = []
         for model in self.models:
             if model.has_pending_wdb2ts_update():
-                logging.info("Model %s has been loaded into WDB, but WDB2TS has not yet been updated." % model)
-                self.update_wdb2ts(model)
+                update_models += [model]
+
+        # Fetch new WDB2TS status information if a model needs updating
+        if update_models:
+            try:
+                self.wdb2ts.load_status()
+            except syncer.exceptions.WDB2TSMissingContentException, e:
+                logging.critical("Error in WDB2TS configuration: %s", unicode(e))
+            except syncer.exceptions.WDB2TSServerException, e:
+                logging.error("Can not fetch WDB2TS status information: %s", unicode(e))
+            else:
+
+                # Update all models in WDB2TS
+                for model in update_models:
+                    logging.info("WDB2TS is out of sync with WDB on model %s" % model)
+                    self.update_wdb2ts(model)
 
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""

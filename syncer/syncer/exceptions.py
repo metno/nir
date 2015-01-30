@@ -53,6 +53,11 @@ class WDB2TSServerException(WDB2TSException):
     pass
 
 
+class WDB2TSMissingContentException(WDB2TSServerException):
+    """Thrown when wdb2ts is missing information in reply."""
+    pass
+
+
 class WDB2TSServiceUnavailableException(WDB2TSServerException):
     """Thrown when wdb2ts returns a 5xx error."""
     pass

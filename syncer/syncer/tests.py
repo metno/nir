@@ -129,14 +129,6 @@ class WDB2TS(unittest.TestCase):
         wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
         self.wdb2ts = syncer.wdb2ts.WDB2TS(base_url, wdb2ts_services)
 
-    def test_request_status(self):
-        with self.assertRaises(syncer.exceptions.WDB2TSConnectionFailure):
-            self.wdb2ts.request_status('proffecepsforecast')
-
-    def test_get_request(self):
-        with self.assertRaises(syncer.exceptions.WDB2TSConnectionFailure):
-            self.wdb2ts._get_request('http://test/testing')
-
     def test_data_providers_from_status_response(self):
         providers = syncer.wdb2ts.WDB2TS.data_providers_from_status_response(self.VALID_STATUS_XML)
         self.assertIn('arome_metcoop_2500m', providers)
@@ -148,11 +140,6 @@ class WDB2TS(unittest.TestCase):
     def test_get_update_url(self):
         url = self.wdb2ts.get_update_url('aromeecepsforecast', 'arome_metcoop_2500m', '2015-01-29T00:00:00Z', 1)
         self.assertEqual('http://localhost/metno-wdb2ts/aromeecepsforecastupdate?arome_metcoop_2500m=2015-01-29T00:00:00Z,1', url)
-
-    def test_request_update(self):
-        update_url = 'http://localhost/metno-wdb2ts/aromeecepsforecastupdate?arome_metcoop_2500m=2015-01-29T00:00:00Z,1'
-        with self.assertRaises(syncer.exceptions.WDB2TSServerUpdateFailure):
-            self.wdb2ts.request_update(update_url)
 
 
 class WDBTest(unittest.TestCase):
@@ -175,17 +162,14 @@ class WDBTest(unittest.TestCase):
     def test_create_load_command(self):
         cmd = syncer.wdb.WDB.create_load_command(
             self.model,
+            self.model_run,
             '/opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc'
         )
-        self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider arome_metcoop_2500m -c /etc/netcdfload/arome.config --loadPlaceDefinition /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc")
+        self.assertEqual(" ".join(cmd), "netcdfLoad --dataprovider 'arome_metcoop_2500m' -c /etc/netcdfload/arome.config --loadPlaceDefinition --dataversion 1337 /opdata/arome2_5/arome_metcoop_default2_5km_20150112T06Z.nc")
 
     def test_convert_opdata_uri_to_file(self):
         filepath = syncer.wdb.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
         self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
-
-    def test_load_modelfile(self):
-        with self.assertRaises(syncer.exceptions.WDBLoadFailed):
-            self.wdb.load_modelfile(self.model, self.model_run)
 
 
 class CollectionTest(unittest.TestCase):

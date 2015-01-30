@@ -18,6 +18,7 @@ class WDB(object):
     def load_model_run(self, model, model_run):
         """Load into wdb all relevant data from a model_run."""
 
+        loaded = 0
         logging.info("Starting loading to WDB: %s" % model_run)
 
         data_uri_pattern = model.data_uri_pattern
@@ -28,19 +29,23 @@ class WDB(object):
             if re.search(data_uri_pattern, data_uri) is not None:
                 logging.info("Data URI '%s' matches regular expression '%s'" % (data_uri, data_uri_pattern))
                 modelfile = WDB.convert_opdata_uri_to_file(data_uri)
-                self.load_modelfile(model, modelfile)
+                self.load_modelfile(model, model_run, modelfile)
+                loaded += 1
+            else:
+                logging.warn("Data URI '%s' does not match regular expression '%s'" % (data_uri, data_uri_pattern))
 
-        logging.info("Successfully finished loading to WDB." % model_run)
+        if loaded:
+            logging.info("Successfully finished loading %d files to WDB." % loaded)
+        else:
+            logging.warn("No files were loaded into WDB.")
 
-    def load_modelfile(self, model, modelfile):
+    def load_modelfile(self, model, model_run, modelfile):
         """Load a modelfile into wdb."""
 
         logging.info("Loading file %s" % modelfile)
 
-        load_cmd = WDB.create_load_command(model, modelfile)
+        load_cmd = WDB.create_load_command(model, model_run, modelfile)
         cmd = self.create_ssh_command(load_cmd)
-
-        logging.debug("Load command: %s" % cmd)
 
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
@@ -64,6 +69,7 @@ class WDB(object):
         cmd: A command represented by a list of arguments.
         Returns three values: exit_code(int), stderr(string) and stdout(string).
         """
+        logging.debug("Executing: %s" % ' '.join(cmd))
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
@@ -72,10 +78,10 @@ class WDB(object):
         return exit_code, stderr, stdout
 
     @staticmethod
-    def create_load_command(model, modelfile):
-        """Generate a wdb load command for a specific model and modelfile, based on info from config."""
+    def create_load_command(model, model_run, model_file):
+        """Generate a wdb load command for a specific model configuration and model run, based on info from config."""
 
-        cmd = [model.load_program, '--dataprovider', model.data_provider]
+        cmd = [model.load_program, '--dataprovider', "'%s'" % model.data_provider]
 
         if hasattr(model, 'load_config'):
             cmd.extend(['-c', model.load_config])
@@ -85,7 +91,9 @@ class WDB(object):
         else:
             cmd.extend(["--loadPlaceDefinition"])
 
-        cmd.append(modelfile)
+        cmd.extend(["--dataversion", unicode(model_run.version)])
+
+        cmd.append(model_file)
 
         return cmd
 

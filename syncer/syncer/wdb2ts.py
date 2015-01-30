@@ -18,16 +18,18 @@ class WDB2TS(object):
 
     def request_status(self, service):
         """
-        Request wdb2ts host for status for specified service and return xml.
+        Request WDB2TS host for status for specified service and return xml.
         """
         status_url = "%s/%s?status" % (self.base_url, service)
+        logging.info("Load status information from WDB2TS service %s: %s" % (service, status_url))
+
         status_xml = self._get_request(status_url)
 
         # Validate xml
         try:
             tree = lxml.etree.fromstring(status_xml)
         except lxml.etree.XMLSyntaxError, e:
-            raise syncer.exceptions.WDB2TSMissingContentException("Could not parse xml content from request %: %s."
+            raise syncer.exceptions.WDB2TSMissingContentException("Could not parse XML content from request %s: %s."
                                                                   % (status_url, e))
         else:
             if not tree.xpath('boolean(/status)'):
@@ -59,9 +61,9 @@ class WDB2TS(object):
         Set status dict for all defined services.
         """
         for service in self.status.keys():
-            logging.info("Load status information from wdb2ts %s for service %s." % (self.base_url, service))
+            self.status[service] = {}
             status_xml = self.request_status(service)
-            self.set_status_for_service(status_xml)
+            self.set_status_for_service(service, status_xml)
 
         return self.status
 
@@ -69,10 +71,8 @@ class WDB2TS(object):
         """
         Set status dict based on values from status_xml. Return status for the service.
         """
-        if self.status[service] is None:
-            self.status[service]['data_providers'] = ()
-
         self.status[service]['data_providers'] = WDB2TS.data_providers_from_status_response(status_xml)
+        logging.debug("Data providers for service %s: %s" % (service, ', '.join(self.status[service]['data_providers'])))
 
         if len(self.status[service]['data_providers']) == 0:
             logging.warn("WDB2TS data providers for service %s set to empty list." % service)
@@ -104,9 +104,9 @@ class WDB2TS(object):
         Update a wdb2ts service for a given model and model_run
         """
         try:
-            update_url = self.get_update_url(service, model.data_provider, model.reference_time, model.version)
+            update_url = self.get_update_url(service, model_run.data_provider, model_run.reference_time, model_run.version)
         except TypeError, e:
-            raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update url for wdb2ts: %s" % e)
+            raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 
         self.request_update(update_url)
 
@@ -126,14 +126,16 @@ class WDB2TS(object):
             response = self._get_request(update_url)
         except (syncer.exceptions.WDB2TSServiceUnavailableException,
                 syncer.exceptions.WDB2TSConnectionFailure), e:
-            raise syncer.exceptions.WDB2TSServerUpdateFailure("Update WDB2TS failed because of some server error: %s" % e)
+            raise syncer.exceptions.WDB2TSServerUpdateFailure("WDB2TS update %s failed because of some server error: %s" % (update_url, e))
         except syncer.exceptions.WDB2TSServiceClientErrorException, e:
-            raise syncer.exceptions.WDB2TSClientUpdateFailure("Update WDB2TS failed because the url %s is not correct: %s" % (update_url, e))
+            raise syncer.exceptions.WDB2TSClientUpdateFailure("WDB2TS update %s failed because the URL is not correct: %s" % (update_url, e))
         else:
-            if 'NoNewRefTime' in response:
-                logging.info("WDB2TS update for %s already updated for %s" % update_url)
+            if 'NoNewDataRefTime' in response:
+                logging.info("WDB2TS already up to date: %s" % update_url)
             elif 'Updated' in response:
-                logging.info("WDB2TS update for %s was successful" % update_url)
+                logging.info("WDB2TS updated successfully: %s" % update_url)
+            else:
+                logging.info("Unknown response from WDB2TS on request %s: %s" % (update_url, response))
 
     def __repr__(self):
         return "WDB2TS(%s, %s)" % (self.base_url, ",".join(self.status.keys()))
