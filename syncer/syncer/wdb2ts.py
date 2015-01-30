@@ -43,27 +43,24 @@ class WDB2TS(object):
         try:
             response = self.session.get(url)
         except requests.ConnectionError, e:
-            raise syncer.exceptions.WDB2TSRequestFailedException("WDB2TS request %s got connection refused: %s"
-                                                                 % (url, e))
+            raise syncer.exceptions.WDB2TSConnectionFailure("Connection to WDB2TS failed: %s" % unicode(e))
 
         if response.status_code >= 500:
-            raise syncer.exceptions.WDB2TSServiceUnavailableException(
-                "WDB2TS returned error code %d for request uri %s " % (response.status_code, response.request.url))
+            exc = syncer.exceptions.WDB2TSServiceUnavailableException
         elif response.status_code >= 400:
-            raise syncer.exceptions.WDB2TSServiceClientErrorException(
-                "WDB2TS returned error code %d for request %s " % (response.status_code, response.request.url))
+            exc = syncer.exceptions.WDB2TSServiceClientErrorException
+        else:
+            return response.content
 
-        return response.content
+        raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
     def load_status(self):
         """
         Set status dict for all defined services.
         """
         for service in self.status.keys():
-            logging.info("Load status information from wdb2ts %s for service %s." %
-                         (self.base_url, service))
+            logging.info("Load status information from wdb2ts %s for service %s." % (self.base_url, service))
             status_xml = self.request_status(service)
-
             self.set_status_for_service(status_xml)
 
         return self.status
@@ -91,6 +88,52 @@ class WDB2TS(object):
         provider_elements = tree.xpath('/status/defined_dataproviders/dataprovider/name')
 
         return [e.text for e in provider_elements]
+
+    def update_wdb2ts(self, model, model_run):
+        """
+        Update all relevant wdb2ts services for the specified model and model_run
+        """
+        data_provider = model.data_provider
+
+        for service in self.status:
+            if data_provider in self.status[service]['data_providers']:
+                self.update_wdb2ts_service(service, model, model_run)
+
+    def update_wdb2ts_service(self, service, model, model_run):
+        """
+        Update a wdb2ts service for a given model and model_run
+        """
+        try:
+            update_url = self.get_update_url(service, model.data_provider, model.reference_time, model.version)
+        except TypeError, e:
+            raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update url for wdb2ts: %s" % e)
+
+        self.request_update(update_url)
+
+    def get_update_url(self, service, data_provider, reference_time, version):
+        """
+        Generate update url for wdb2ts service.
+        """
+        return "%s/%supdate?%s=%s,%d" % (self.base_url, service, data_provider, reference_time, version)
+
+    def request_update(self, update_url):
+        """
+        Send update request to wdb2ts and check if the update went through
+        """
+
+        # Raise separate exceptions for client update failures and server update failures.
+        try:
+            response = self._get_request(update_url)
+        except (syncer.exceptions.WDB2TSServiceUnavailableException,
+                syncer.exceptions.WDB2TSConnectionFailure), e:
+            raise syncer.exceptions.WDB2TSServerUpdateFailure("Update WDB2TS failed because of some server error: %s" % e)
+        except syncer.exceptions.WDB2TSServiceClientErrorException, e:
+            raise syncer.exceptions.WDB2TSClientUpdateFailure("Update WDB2TS failed because the url %s is not correct: %s" % (update_url, e))
+        else:
+            if 'NoNewRefTime' in response:
+                logging.info("WDB2TS update for %s already updated for %s" % update_url)
+            elif 'Updated' in response:
+                logging.info("WDB2TS update for %s was successful" % update_url)
 
     def __repr__(self):
         return "WDB2TS(%s, %s)" % (self.base_url, ",".join(self.status.keys()))

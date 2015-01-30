@@ -270,6 +270,7 @@ class Daemon:
             if model.has_pending_wdb_load():
                 logging.info("Model %s has a pending model run not yet loaded into WDB." % model)
                 self.load_model(model)
+                # TODO: self.wdb2ts.update_wdb2ts(model, model.current_model_run)
 
         # Loop through models again, and see which are loaded into WDB but not yet used to update WDB2TS
         for model in self.models:

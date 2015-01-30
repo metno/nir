@@ -38,21 +38,46 @@ class OpdataURIException(Exception):
     pass
 
 
-class WDB2TSServiceUnavailableException(RESTServiceUnavailableException):
+class WDB2TSException(Exception):
+    """Base class for WDB2TS errors."""
+    pass
+
+
+class WDB2TSClientException(WDB2TSException):
+    """Base class for client errors during WDB2TS calls."""
+    pass
+
+
+class WDB2TSServerException(WDB2TSException):
+    """Base class for client errors during WDB2TS calls."""
+    pass
+
+
+class WDB2TSServiceUnavailableException(WDB2TSServerException):
     """Thrown when wdb2ts returns a 5xx error."""
     pass
 
 
-class WDB2TSServiceClientErrorException(RESTServiceClientErrorException):
+class WDB2TSServiceClientErrorException(WDB2TSClientException):
     """Thrown when wdb2ts returns a 4xx error."""
     pass
 
 
-class WDB2TSWrongContentException(Exception):
+class WDB2TSWrongContentException(WDB2TSServerException):
     """Thrown when a response from wdb2ts returns a content that is not correct"""
     pass
 
 
-class WDB2TSRequestFailedException(Exception):
-    """Thrown when a requst to wdb2ts failed for some reason"""
+class WDB2TSConnectionFailure(WDB2TSServerException):
+    """Thrown when a request to wdb2ts failed for some reason"""
+    pass
+
+
+class WDB2TSClientUpdateFailure(WDB2TSClientException):
+    """Thrown when an update request to wdb2ts failed"""
+    pass
+
+
+class WDB2TSServerUpdateFailure(WDB2TSServerException):
+    """Thrown when an update request to wdb2ts failed"""
     pass

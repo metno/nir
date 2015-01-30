@@ -3,6 +3,7 @@
 modelstatus/venv
 modelstatus/build
 virtualenv
+*~
 
 # Eclipse Artifacts
 .project

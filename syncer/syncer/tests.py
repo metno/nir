@@ -125,28 +125,34 @@ class WDB2TS(unittest.TestCase):
         config_file = StringIO.StringIO(config_file_contents)
         config = syncer.Configuration()
         config.load(config_file)
+        base_url = config.get('wdb2ts', 'base_url')
         wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
-        self.wdb2ts = syncer.wdb2ts.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
+        self.wdb2ts = syncer.wdb2ts.WDB2TS(base_url, wdb2ts_services)
 
     def test_request_status(self):
-
-        with self.assertRaises(syncer.exceptions.WDB2TSRequestFailedException):
+        with self.assertRaises(syncer.exceptions.WDB2TSConnectionFailure):
             self.wdb2ts.request_status('proffecepsforecast')
 
     def test_get_request(self):
-        with self.assertRaises(syncer.exceptions.WDB2TSRequestFailedException):
+        with self.assertRaises(syncer.exceptions.WDB2TSConnectionFailure):
             self.wdb2ts._get_request('http://test/testing')
 
     def test_data_providers_from_status_response(self):
-        providers = syncer.wdb2ts.WDB2TS.data_providers_from_status_response(WDB2TS.VALID_STATUS_XML)
-
+        providers = syncer.wdb2ts.WDB2TS.data_providers_from_status_response(self.VALID_STATUS_XML)
         self.assertIn('arome_metcoop_2500m', providers)
 
     def test_set_status_for_service(self):
-
-        status = self.wdb2ts.set_status_for_service('aromeecepsforecast', WDB2TS.VALID_STATUS_XML)
-
+        status = self.wdb2ts.set_status_for_service('aromeecepsforecast', self.VALID_STATUS_XML)
         self.assertIn('arome_metcoop_2500m', status['data_providers'])
+
+    def test_get_update_url(self):
+        url = self.wdb2ts.get_update_url('aromeecepsforecast', 'arome_metcoop_2500m', '2015-01-29T00:00:00Z', 1)
+        self.assertEqual('http://localhost/metno-wdb2ts/aromeecepsforecastupdate?arome_metcoop_2500m=2015-01-29T00:00:00Z,1', url)
+
+    def test_request_update(self):
+        update_url = 'http://localhost/metno-wdb2ts/aromeecepsforecastupdate?arome_metcoop_2500m=2015-01-29T00:00:00Z,1'
+        with self.assertRaises(syncer.exceptions.WDB2TSServerUpdateFailure):
+            self.wdb2ts.request_update(update_url)
 
 
 class WDBTest(unittest.TestCase):
