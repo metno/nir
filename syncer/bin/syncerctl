@@ -1,0 +1,24 @@
+#!/usr/bin/env python2.7
+
+import sys
+import zmq
+import json
+import argparse
+
+context = zmq.Context()
+sock = context.socket(zmq.REQ)
+sock.connect('tcp://localhost:5050')
+
+parser = argparse.ArgumentParser()
+parser.add_argument('command', metavar='command', choices=['hello'], help='{%(choices)s}')
+args = parser.parse_args()
+
+cmd = unicode(args.command)
+
+sock.send_string(cmd)
+reply = sock.recv_json()
+
+for x in reply['data']:
+    print x
+
+sys.exit(reply['status'])

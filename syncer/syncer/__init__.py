@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import multiprocessing
 import logging
 import logging.config
 import sys
@@ -368,7 +369,7 @@ def run(argv):
         logging.critical("Missing configuration for WDB host")
         return EXIT_CONFIG
 
-    # Start main application
+    # Read configuration
     logging.info("Syncer is started")
     model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
@@ -376,17 +377,34 @@ def run(argv):
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
     tick = int(config.get('syncer', 'tick'))
 
+    # Start the ZeroMQ modelstatus subscriber process
     zmq_socket = config.get('zeromq', 'socket')
     zmq = syncer.zeromq.ZMQSubscriber(zmq_socket)
-
     logging.info("ZeroMQ subscriber listening for events from %s" % zmq_socket)
+
+    # Start the ZeroMQ controller process
+    zmq_controller_socket = config.get('zeromq', 'controller_socket')
+    zmq_ctl_proc = multiprocessing.Process(target=run_zmq_controller, args=(zmq_controller_socket,))
+    zmq_ctl_proc.start()
+    logging.info("ZeroMQ controller socket listening for commands on %s" % zmq_controller_socket)
+
+    # Instantiate REST API collection objects
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
     data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
 
+    # Start main application
     daemon = Daemon(config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection, tick)
     exit_code = daemon.run()
 
     return exit_code
+
+
+def run_zmq_controller(sock):
+    controller = syncer.zeromq.ZMQController(sock)
+    try:
+        controller.run()
+    except (SystemExit, KeyboardInterrupt):
+        pass
 
 
 def main(argv):

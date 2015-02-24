@@ -301,7 +301,8 @@ class ZeroMQTest(unittest.TestCase):
     Tests the ZeroMQ classes
     """
     def setUp(self):
-        self.zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
+        self.zmq = syncer.zeromq.ZMQSubscriber('ipc://test_zmq')
+        self.controller = syncer.zeromq.ZMQController('ipc://test_ctl')
 
     def test_decode_event_ok(self):
         string = 'foo 123'
@@ -324,6 +325,16 @@ class ZeroMQTest(unittest.TestCase):
         self.assertEqual(event.bar, 'baz')
         self.assertEqual(event.resource, 'foo')
         self.assertEqual(event.id, 123)
+
+    def test_command_non_existing(self):
+        data = self.controller.exec_command(['foobarbaz'])
+        self.assertEqual(data['status'], 2)
+        self.assertEqual(data['data'], ['Invalid command'])
+
+    def test_command_hello(self):
+        data = self.controller.exec_command(['hello'])
+        self.assertEqual(data['status'], 0)
+        self.assertEqual(data['data'], ['Hello, world!'])
 
 
 if __name__ == '__main__':
