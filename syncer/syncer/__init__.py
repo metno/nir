@@ -5,7 +5,6 @@ import logging.config
 import sys
 import argparse
 import ConfigParser
-import time
 
 import syncer.wdb
 import syncer.wdb2ts
@@ -153,7 +152,7 @@ class Model:
 
 
 class Daemon:
-    def __init__(self, config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection):
+    def __init__(self, config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection, tick):
         self.config = config
         self.models = models
         self.zmq = zmq
@@ -161,6 +160,7 @@ class Daemon:
         self.wdb2ts = wdb2ts
         self.model_run_collection = model_run_collection
         self.data_collection = data_collection
+        self.tick = tick
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -172,6 +172,7 @@ class Daemon:
         num_models = len(self.models)
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num + 1, num_models, model.data_provider))
+        logging.info("Main loop interval set to %d seconds.", self.tick)
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -258,6 +259,19 @@ class Daemon:
         except syncer.exceptions.WDB2TSServerException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
 
+    def main_loop_zmq(self):
+        """
+        Check if we've got something from the Modelstatus ZeroMQ publisher.
+        This function will block for the amount of seconds defined in the
+        configuration option `syncer.tick`.
+        """
+        zmq_event = self.zmq.get_event_timeout(self.tick)
+        if zmq_event:
+            try:
+                self.handle_zmq_event(zmq_event)
+            except syncer.exceptions.RESTException, e:
+                logging.error("Server returned invalid resource: %s" % e)
+
     def main_loop_inner(self):
         """
         This function is a single iteration in the main loop.
@@ -265,14 +279,6 @@ class Daemon:
         Modelstatus REST API service, loads data into WDB, and updates WDB2TS
         if applicable.
         """
-
-        # Check if we've got something from the Modelstatus ZeroMQ publisher
-        zmq_event = self.zmq.get_event()
-        if zmq_event:
-            try:
-                self.handle_zmq_event(zmq_event)
-            except syncer.exceptions.RESTException, e:
-                logging.error("Server returned invalid resource: %s" % e)
 
         # Try to initialize all un-initialized models with current model run status
         for model in self.models:
@@ -314,7 +320,7 @@ class Daemon:
         try:
             while True:
                 self.main_loop_inner()
-                time.sleep(1)
+                self.main_loop_zmq()
 
         except KeyboardInterrupt:
             logging.info("Terminated by SIGINT")
@@ -368,6 +374,7 @@ def run(argv):
     models = set([Model(Model.data_from_config_section(config, 'model_%s' % key)) for key in model_keys])
     base_url = config.get('webservice', 'url')
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
+    tick = int(config.get('syncer', 'tick'))
 
     zmq_socket = config.get('zeromq', 'socket')
     zmq = syncer.zeromq.ZMQSubscriber(zmq_socket)
@@ -376,7 +383,7 @@ def run(argv):
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
     data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
 
-    daemon = Daemon(config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection)
+    daemon = Daemon(config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection, tick)
     exit_code = daemon.run()
 
     return exit_code

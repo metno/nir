@@ -21,6 +21,8 @@ class ZMQSubscriber(object):
         self.sock = self.context.socket(zmq.SUB)
         self.sock.connect(addr)
         self.sock.setsockopt_string(zmq.SUBSCRIBE, u'')
+        self.poller = zmq.Poller()
+        self.poller.register(self.sock, zmq.POLLIN)
 
     def recv(self):
         """
@@ -39,6 +41,15 @@ class ZMQSubscriber(object):
         """
         msg = self.recv()
         return self.decode_event(msg)
+
+    def get_event_timeout(self, timeout):
+        """
+        Like get_event(), but with a timeout in seconds.
+        """
+        events = self.poller.poll(timeout * 1000)
+        if not events:
+            return None
+        return self.get_event()
 
     def decode_event(self, msg):
         """
