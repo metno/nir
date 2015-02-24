@@ -10,6 +10,18 @@ set -e
 # Path to virtual environment for the application
 venvpath=$1
 
+if [ -z "$venvpath" ]
+then
+    echo "Missing argument to virtualenv directory, usage:"
+    echo "./bootstrap.sh <path-to-virtualenv>"
+    exit 1;
+fi
+
+if [ ! -d "$venvpath" ]
+then
+    virtualenv "$venvpath"
+fi
+
 source "$venvpath/bin/activate"
 
 path_to_reqsfile=`dirname $0`

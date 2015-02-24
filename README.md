@@ -14,3 +14,9 @@ flake8 is required to run `arc lint`. Run ```sudo pip install flake8``` in Ubunt
 ### System packages
 
 To run Syncer, you'll need to install the package `python-lxml` through your package manager.
+
+### Setup the environment
+
+To setup and install requirements, run `./setup.py develop` for syncer.
+For modelstatus run `./bootstrap.sh <virtualenv-dir>`
+
