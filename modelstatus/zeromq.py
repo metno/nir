@@ -11,7 +11,7 @@ import logging
 
 class ZMQPublisher(object):
     def __init__(self, addr):
-        self.context = zmq.Context.instance()
+        self.context = zmq.Context()
         self.sock = self.context.socket(zmq.PUB)
         self.sock.bind(addr)
 
