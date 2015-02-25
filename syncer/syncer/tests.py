@@ -206,9 +206,10 @@ class DaemonTest(unittest.TestCase):
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         data_collection = syncer.rest.DataCollection('http://localhost', True)
-        zmq = syncer.zeromq.ZMQSubscriber('ipc://null')
+        zmq_subscriber = syncer.zeromq.ZMQSubscriber('ipc://null')
+        zmq_agent = syncer.zeromq.ZMQAgent()
         tick = 300
-        syncer.Daemon(self.config, models, zmq, self.wdb, self.wdb2ts, model_run_collection, data_collection, tick)
+        syncer.Daemon(self.config, models, zmq_subscriber, zmq_agent, self.wdb, self.wdb2ts, model_run_collection, data_collection, tick)
 
     def test_instance_model_type_error(self):
         models = ['invalid type']

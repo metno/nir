@@ -8,7 +8,23 @@ import zmq
 import logging
 
 
-class ZMQEvent(object):
+class ZMQBase(object):
+
+    STATUS_OK = 0
+    STATUS_FAIL = 1
+    STATUS_INVALID = 2
+
+    def make_reply(self, code, data):
+        return {
+            'status': code,
+            'data': data
+        }
+
+    def tokenize(self, s):
+        return s.strip().split(' ')
+
+
+class ZMQEvent(ZMQBase):
     def __init__(self, **kwargs):
         [setattr(self, key, value) for key, value in kwargs.iteritems()]
 
@@ -16,14 +32,12 @@ class ZMQEvent(object):
         return "ZeroMQ event resource=%s id=%d" % (self.resource, self.id)
 
 
-class ZMQSubscriber(object):
+class ZMQSubscriber(ZMQBase):
     def __init__(self, addr):
         self.context = zmq.Context()
         self.sock = self.context.socket(zmq.SUB)
         self.sock.connect(addr)
         self.sock.setsockopt_string(zmq.SUBSCRIBE, u'')
-        self.poller = zmq.Poller()
-        self.poller.register(self.sock, zmq.POLLIN)
 
     def recv(self):
         """
@@ -43,15 +57,6 @@ class ZMQSubscriber(object):
         msg = self.recv()
         return self.decode_event(msg)
 
-    def get_event_timeout(self, timeout):
-        """
-        Like get_event(), but with a timeout in seconds.
-        """
-        events = self.poller.poll(timeout * 1000)
-        if not events:
-            return None
-        return self.get_event()
-
     def decode_event(self, msg):
         """
         Check for valid resource update events, and return a dictionary.
@@ -70,20 +75,74 @@ class ZMQSubscriber(object):
         return event
 
 
-class ZMQController(object):
+class ZMQAgent(ZMQBase):
+    """
+    Receives commands from a ZMQController.
+    """
+    def __init__(self):
+        self.context = zmq.Context()
+        self.init_req('tcp://127.0.0.1:59900')
+        self.init_rep('tcp://127.0.0.1:59901')
+
+    def init_req(self, addr):
+        """
+        Initialize a ZMQ IPC socket which sends status updates to ZMQController.
+        """
+        self.req = self.context.socket(zmq.REQ)
+        self.req.setsockopt(zmq.SNDTIMEO, 2000)
+        self.req.bind(addr)
+
+    def init_rep(self, addr):
+        """
+        Initialize a ZMQ IPC socket which receives commands from ZMQController.
+        """
+        self.rep = self.context.socket(zmq.REP)
+        self.rep.setsockopt(zmq.SNDTIMEO, 2000)
+        self.rep.bind(addr)
+
+    def sync_status(self, data):
+        """
+        Synchronize status with ZMQController.
+        """
+        self.req.send_json(data)
+        self.req.recv()
+
+    def get_command(self):
+        return self.tokenize(self.rep.recv_string())
+
+    def send_command_response(self, status, data):
+        return self.rep.send_json(self.make_reply(status, data))
+
+
+class ZMQController(ZMQBase):
     """
     API to Syncer providing status queries and command issuing.
     """
-
-    STATUS_OK = 0
-    STATUS_FAIL = 1
-    STATUS_INVALID = 2
-
     def __init__(self, addr):
         self.context = zmq.Context()
+        self.init_rep('tcp://127.0.0.1:59900')
+        self.init_req('tcp://127.0.0.1:59901')
         self.init_sock(addr)
         self.poller = zmq.Poller()
         self.poller.register(self.sock, zmq.POLLIN)
+        self.poller.register(self.rep, zmq.POLLIN)
+        self.status = {
+            'models': []
+        }
+
+    def init_req(self, addr):
+        """
+        Initialize a ZMQ IPC socket which requests that commands are run on ZMQAgent.
+        """
+        self.req = self.context.socket(zmq.REQ)
+        self.req.connect(addr)
+
+    def init_rep(self, addr):
+        """
+        Initialize a ZMQ IPC socket which receives status updates from ZMQAgent.
+        """
+        self.rep = self.context.socket(zmq.REP)
+        self.rep.connect(addr)
 
     def init_sock(self, addr):
         """
@@ -92,17 +151,31 @@ class ZMQController(object):
         self.sock = self.context.socket(zmq.REP)
         self.sock.bind(addr)
 
-    def make_reply(self, code, data):
-        return {
-            'status': code,
-            'data': data
-        }
-
     def run_hello(self):
         """
         Hello World command.
         """
         return self.make_reply(self.STATUS_OK, ['Hello, world!'])
+
+    def run_status(self):
+        """
+        Return information about model status.
+        """
+        return self.make_reply(self.STATUS_OK, self.status['models'])
+
+    def run_load(self, model_run_id):
+        """
+        (Re)-load a model run into WDB.
+        """
+        model_run_id = int(model_run_id)
+        return self.exec_syncer('load %d' % model_run_id)
+
+    def exec_syncer(self, command):
+        """
+        Send a command to Syncer.
+        """
+        self.req.send_string(unicode(command))
+        return self.req.recv_json()
 
     def exec_command(self, tokens):
         try:
@@ -110,6 +183,10 @@ class ZMQController(object):
                 raise Exception('Empty command list')
             if tokens[0] == 'hello':
                 return self.run_hello()
+            if tokens[0] == 'status':
+                return self.run_status()
+            if tokens[0] == 'load':
+                return self.run_load(tokens[1])
             raise Exception('Invalid command')
         except Exception, e:
             return self.make_reply(self.STATUS_INVALID, [unicode(e)])
@@ -121,9 +198,12 @@ class ZMQController(object):
         Receives status updates from ZMQAgent and caches them.
         """
         while True:
-            command = self.sock.recv_string()
-            if not command:
-                continue
-            logging.info("Remote command: %s", command)
-            tokens = command.strip().split(' ')
-            self.sock.send_json(self.exec_command(tokens))
+            events = dict(self.poller.poll())
+            if self.sock in events:
+                command = self.sock.recv_string()
+                logging.info("Received remote command: %s", command)
+                tokens = self.tokenize(command)
+                self.sock.send_json(self.exec_command(tokens))
+            if self.rep in events:
+                self.status = self.rep.recv_json()
+                self.rep.send(b'')

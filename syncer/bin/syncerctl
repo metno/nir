@@ -5,20 +5,48 @@ import zmq
 import json
 import argparse
 
+def print_table(table):
+    col_width = [max(len(str(x)) for x in col) for col in zip(*table)]
+    for i, line in enumerate(table):
+        print "   ".join("{:{}}".format(x, col_width[i]) for i, x in enumerate(line))
+        if i == 0:
+            print '-' * (sum(col_width) + len(table)*3 + 3)
+
+def str_none(s):
+    return s if s else '-'
+
 context = zmq.Context()
 sock = context.socket(zmq.REQ)
 sock.connect('tcp://localhost:5050')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('command', metavar='command', choices=['hello'], help='{%(choices)s}')
+parser.add_argument('command', metavar='command', choices=['hello', 'status', 'load'], help='{%(choices)s}')
+parser.add_argument('data', nargs='*')
 args = parser.parse_args()
 
-cmd = unicode(args.command)
+cmd = args.command
+if args.data:
+    cmd += ' ' + ' '.join(args.data)
 
-sock.send_string(cmd)
+sock.send_string(unicode(cmd))
 reply = sock.recv_json()
 
-for x in reply['data']:
-    print x
+if args.command == 'status':
+    table = []
+    table += [( 'Data provider',
+                'Available model run',
+                'Model run in WDB',
+                'Model run in WDB2TS',
+             )]
+    for model in reply['data']:
+        table += [( model['data_provider'],
+                    str_none(model['available_model_run']),
+                    str_none(model['wdb_model_run']),
+                    str_none(model['wdb2ts_model_run']),
+                 )]
+    print_table(table)
+else:
+    for x in reply['data']:
+        print x
 
 sys.exit(reply['status'])

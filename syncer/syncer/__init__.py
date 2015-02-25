@@ -4,6 +4,7 @@ import multiprocessing
 import logging
 import logging.config
 import sys
+import zmq
 import argparse
 import ConfigParser
 
@@ -148,20 +149,37 @@ class Model:
         """
         return self.wdb_model_run != self.wdb2ts_model_run
 
+    def serialize(self):
+        """
+        Return a representation of the model variables
+        """
+        return {
+            'data_provider': self.data_provider,
+            'available_model_run': self.available_model_run.id if self.available_model_run else None,
+            'wdb_model_run': self.wdb_model_run.id if self.wdb_model_run else None,
+            'wdb2ts_model_run': self.wdb_model_run.id if self.wdb_model_run else None,
+        }
+
     def __repr__(self):
         return self.data_provider
 
 
 class Daemon:
-    def __init__(self, config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection, tick):
+    def __init__(self, config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick):
         self.config = config
         self.models = models
-        self.zmq = zmq
+        self.zmq_subscriber = zmq_subscriber
+        self.zmq_agent = zmq_agent
         self.wdb = wdb
         self.wdb2ts = wdb2ts
         self.model_run_collection = model_run_collection
         self.data_collection = data_collection
         self.tick = tick
+
+        # Set up polling on the ZeroMQ sockets
+        self.zmq_poller = zmq.Poller()
+        self.zmq_poller.register(self.zmq_subscriber.sock, zmq.POLLIN)
+        self.zmq_poller.register(self.zmq_agent.rep, zmq.POLLIN)
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -174,6 +192,14 @@ class Daemon:
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num + 1, num_models, model.data_provider))
         logging.info("Main loop interval set to %d seconds.", self.tick)
+
+    def sync_zmq_status(self):
+        """
+        Send status update to the ZeroMQ controller.
+        """
+        logging.debug("Synchronizing model status with ZeroMQ controller.")
+        model_list = [model.serialize() for model in self.models]
+        self.zmq_agent.sync_status({'models': model_list})
 
     def get_latest_model_run(self, model):
         """Fetch the latest model run from REST API, and assign it to the provided Model."""
@@ -208,13 +234,24 @@ class Daemon:
         if event.resource == 'model_run':
             id = event.id
         elif event.resource == 'data':
-            data_object = self.data_collection.get_object(event.id)
+            try:
+                data_object = self.data_collection.get_object(event.id)
+            except syncer.exceptions.RESTException, e:
+                logging.error("Server returned invalid resource: %s" % e)
+                return
             id = data_object.model_run_id
         else:
             logging.info("Nothing to do with this kind of event; no action taken.")
             return
 
-        model_run_object = self.model_run_collection.get_object(id)
+        self.load_model_run(id)
+
+    def load_model_run(self, id):
+        try:
+            model_run_object = self.model_run_collection.get_object(id)
+        except syncer.exceptions.RESTException, e:
+            logging.error("Server returned invalid resource: %s" % e)
+            return
 
         for model in self.models:
             if model.data_provider == model_run_object.data_provider:
@@ -222,6 +259,21 @@ class Daemon:
                 return
 
         logging.info("No models configured to handle this event; no action taken.")
+
+    def handle_zmq_command(self, tokens):
+        """
+        Execute a command from the internal command queue.
+        This input is already sanitized.
+        """
+        logging.info("Executing remote command: %s", ' '.join(tokens))
+
+        if tokens[0] == 'load':
+            id = int(tokens[1])
+            self.zmq_agent.send_command_response(self.zmq_agent.STATUS_OK, ['Model run %d scheduled for loading' % id])
+            self.load_model_run(id)
+            return
+
+        self.zmq_agent.send_command_response(self.zmq_agent.STATUS_INVALID, ['command not recognized'])
 
     def set_available_model_run(self, model, model_run):
         """
@@ -231,6 +283,7 @@ class Daemon:
             logging.warn("Model run contains no data, discarding.")
             return
         model.set_available_model_run(model_run)
+        self.sync_zmq_status()
 
     def load_model(self, model):
         """
@@ -241,6 +294,7 @@ class Daemon:
         try:
             self.wdb.load_model_run(model, model.available_model_run)
             model.set_wdb_model_run(model.available_model_run)
+            self.sync_zmq_status()
 
         except syncer.exceptions.WDBLoadFailed, e:
             logging.error("WDB load failed: %s" % e)
@@ -256,22 +310,30 @@ class Daemon:
         try:
             self.wdb2ts.update_wdb2ts(model, model.wdb_model_run)
             model.set_wdb2ts_model_run(model.wdb_model_run)
+            self.sync_zmq_status()
 
         except syncer.exceptions.WDB2TSServerException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
 
     def main_loop_zmq(self):
         """
-        Check if we've got something from the Modelstatus ZeroMQ publisher.
-        This function will block for the amount of seconds defined in the
-        configuration option `syncer.tick`.
+        Check if we've got something from the Modelstatus ZeroMQ publisher or
+        the internal command queue.  This function will block for the amount of
+        seconds defined in the configuration option `syncer.tick`.
         """
-        zmq_event = self.zmq.get_event_timeout(self.tick)
-        if zmq_event:
-            try:
+
+        events = dict(self.zmq_poller.poll(self.tick * 1000))
+        if not events:
+            return None
+
+        if self.zmq_subscriber.sock in events:
+            zmq_event = self.zmq_subscriber.get_event()
+            if zmq_event:
                 self.handle_zmq_event(zmq_event)
-            except syncer.exceptions.RESTException, e:
-                logging.error("Server returned invalid resource: %s" % e)
+
+        if self.zmq_agent.rep in events:
+            zmq_command = self.zmq_agent.get_command()
+            self.handle_zmq_command(zmq_command)
 
     def main_loop_inner(self):
         """
@@ -317,6 +379,8 @@ class Daemon:
     def run(self):
         """Responsible for running the main loop. Returns the program exit code."""
         logging.info("Daemon started.")
+
+        self.sync_zmq_status()
 
         try:
             while True:
@@ -378,9 +442,12 @@ def run(argv):
     tick = int(config.get('syncer', 'tick'))
 
     # Start the ZeroMQ modelstatus subscriber process
-    zmq_socket = config.get('zeromq', 'socket')
-    zmq = syncer.zeromq.ZMQSubscriber(zmq_socket)
-    logging.info("ZeroMQ subscriber listening for events from %s" % zmq_socket)
+    zmq_subscriber_socket = config.get('zeromq', 'socket')
+    zmq_subscriber = syncer.zeromq.ZMQSubscriber(zmq_subscriber_socket)
+    logging.info("ZeroMQ subscriber listening for events from %s" % zmq_subscriber_socket)
+
+    # Instantiate ZeroMQ agent class
+    zmq_agent = syncer.zeromq.ZMQAgent()
 
     # Start the ZeroMQ controller process
     zmq_controller_socket = config.get('zeromq', 'controller_socket')
@@ -393,7 +460,7 @@ def run(argv):
     data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
 
     # Start main application
-    daemon = Daemon(config, models, zmq, wdb, wdb2ts, model_run_collection, data_collection, tick)
+    daemon = Daemon(config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick)
     exit_code = daemon.run()
 
     return exit_code
