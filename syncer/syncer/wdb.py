@@ -53,9 +53,11 @@ class WDB(object):
             raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
         if stderr is not None:
-            logging.warning("WDB load might have failed due to the following messages in stderr:")
-            for line in stderr.splitlines():
-                logging.warning("WDB load error: " + line)
+            lines = stderr.splitlines()
+            if lines:
+                logging.warning("WDB load might have failed due to the following messages in stderr:")
+                for line in lines:
+                    logging.warning("WDB load error: " + line)
 
         if exit_code > 0:
             raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
