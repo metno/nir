@@ -95,6 +95,16 @@ class Model:
 
         return data
 
+    def get_data_provider_or_group(self):
+        """
+        Return the name of the data provider group if the model has this
+        attribute. If not, return the data provider name.
+        """
+        for attr in ['data_provider_group', 'data_provider']:
+            if hasattr(self, attr):
+                return getattr(self, attr)
+        raise RuntimeError("A bug in the code enabled 'data_provider' to be a non-mandatory configuration option to Model.")
+
     def _valid_model_run(self, model_run):
         return isinstance(model_run, syncer.rest.BaseResource)
 

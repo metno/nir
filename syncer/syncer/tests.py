@@ -23,6 +23,7 @@ ssh_user=wdb
 
 [model_foo]
 data_provider=arome_metcoop_2500m
+data_provider_group=arome
 data_uri_pattern=(arome_metcoop|bar??)
 load_program=netcdfLoad
 load_config=/etc/netcdfload/arome.config
@@ -67,6 +68,7 @@ VALID_MODEL_RUN_FIXTURE = {
 
 VALID_MODEL_FIXTURE = {
     'data_provider': 'arome_metcoop_2500m',
+    'data_provider_group': 'arome',
     'data_uri_pattern': '(arome_metcoop|bar??)',
     'load_program': 'netcdfLoad',
     'load_config': '/etc/netcdfload/arome.config'

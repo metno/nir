@@ -93,7 +93,7 @@ class WDB2TS(object):
         """
         Update all relevant wdb2ts services for the specified model and model_run
         """
-        data_provider = model.data_provider
+        data_provider = model.get_data_provider_or_group()
 
         for service in self.status:
             if data_provider in self.status[service]['data_providers']:
@@ -104,7 +104,7 @@ class WDB2TS(object):
         Update a wdb2ts service for a given model and model_run
         """
         try:
-            update_url = self.get_update_url(service, model_run.data_provider, model_run.reference_time, model_run.version)
+            update_url = self.get_update_url(service, model.get_data_provider_or_group(), model_run.reference_time, model_run.version)
         except TypeError, e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 
