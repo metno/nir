@@ -95,11 +95,14 @@ class Model:
 
         return data
 
+    def _valid_model_run(self, model_run):
+        return isinstance(model_run, syncer.rest.BaseResource)
+
     def _validate_model_run(self, model_run):
         """
         Check that `model_run` is of the correct type.
         """
-        if model_run is not None and not isinstance(model_run, syncer.rest.BaseResource):
+        if not self._valid_model_run(model_run):
             raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % sys._getframe().f_code.co_name)
 
     def set_available_model_run(self, model_run):
@@ -153,12 +156,14 @@ class Model:
         """
         Return a representation of the model variables
         """
-        return {
+        data = {
             'data_provider': self.data_provider,
-            'available_model_run': self.available_model_run.id if self.available_model_run else None,
-            'wdb_model_run': self.wdb_model_run.id if self.wdb_model_run else None,
-            'wdb2ts_model_run': self.wdb_model_run.id if self.wdb_model_run else None,
         }
+        for key in ['available_model_run', 'wdb_model_run', 'wdb2ts_model_run']:
+            object_ = getattr(self, key)
+            data[key] = object_.serialize() if self._valid_model_run(object_) else None
+
+        return data
 
     def __repr__(self):
         return self.data_provider

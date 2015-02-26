@@ -5,46 +5,90 @@ import zmq
 import json
 import argparse
 
-def print_table(table):
-    col_width = [max(len(str(x)) for x in col) for col in zip(*table)]
-    for i, line in enumerate(table):
-        print "   ".join("{:{}}".format(x, col_width[i]) for i, x in enumerate(line))
-        if i == 0:
-            print '-' * (sum(col_width) + len(table)*3 + 3)
-
-def str_none(s):
-    return s if s else '-'
-
+# Create socket and connect to service
 context = zmq.Context()
 sock = context.socket(zmq.REQ)
 sock.connect('tcp://localhost:5050')
 
+# Parse arguments
 parser = argparse.ArgumentParser()
 parser.add_argument('command', metavar='command', choices=['hello', 'status', 'load'], help='{%(choices)s}')
 parser.add_argument('data', nargs='*')
+parser.add_argument('--full', action='store_true', help='Show all files belonging to data sets')
+parser.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
 args = parser.parse_args()
 
+# Assemble a command
 cmd = args.command
 if args.data:
     cmd += ' ' + ' '.join(args.data)
 
+# REQ/REP to ZeroMQ socket in Syncer
 sock.send_string(unicode(cmd))
 reply = sock.recv_json()
 
+def get_model_run(model_run):
+    return model_run if model_run and model_run != 'None' else None
+
+def print_model_run(model_run):
+    print             "  id              %d" % model_run['id']
+    print             "  reference_time  %s" % model_run['reference_time']
+    if args.full:
+        for index, data in enumerate(model_run['data']):
+            print     "  file %3d        %s" % (index + 1, data['href'])
+    elif len(model_run['data']) == 1:
+        print         "  file            %s" % model_run['data'][0]['href']
+    else:
+        print         "  num files       %d" % len(model_run['data'])
+
+def print_model(model):
+    model_run = get_model_run(model['available_model_run'])
+    wdb_run = get_model_run(model['wdb_model_run'])
+    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
+
+    wdb_sync = False
+    wdb2ts_sync = False
+
+    print model['data_provider']
+    print '-' * len(model['data_provider'])
+
+    if model_run:
+        print         "Most recent model run according to Syncer:"
+        print_model_run(model_run)
+        if wdb_run and wdb_run['id'] == model_run['id']:
+            print     "  wdb             synchronized"
+            wdb_sync = True
+        else:
+            print     "  wdb             NOT synchronized"
+        if wdb2ts_run and wdb2ts_run['id'] == model_run['id']:
+            print     "  wdb2ts          synchronized"
+            wdb2ts_sync = True
+        else:
+            print     "  wdb2ts          NOT synchronized"
+
+    if not wdb_sync:
+        if model_run:
+            print
+        if wdb_run:
+            print     "Model run in WDB:"
+            print_model_run(wdb_run)
+        else:
+            print     "Current Syncer instance has not loaded this model into WDB."
+
+    if not wdb2ts_sync:
+        if wdb_run:
+            if model_run or not wdb_sync:
+                print
+            print     "Model run in WDB2TS:"
+            print_model_run(wdb2ts_run)
+        else:
+            print     "Current Syncer instance has not updated this model in WDB2TS."
+
 if args.command == 'status':
-    table = []
-    table += [( 'Data provider',
-                'Available model run',
-                'Model run in WDB',
-                'Model run in WDB2TS',
-             )]
     for model in reply['data']:
-        table += [( model['data_provider'],
-                    str_none(model['available_model_run']),
-                    str_none(model['wdb_model_run']),
-                    str_none(model['wdb2ts_model_run']),
-                 )]
-    print_table(table)
+        if not args.model or model['data_provider'] in args.model:
+            print_model(model)
+            print
 else:
     for x in reply['data']:
         print x

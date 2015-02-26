@@ -7,6 +7,7 @@ import requests
 import json
 import logging
 import dateutil.parser
+import dateutil.tz
 
 import syncer.exceptions
 
@@ -30,6 +31,25 @@ class BaseResource(object):
         """Do variable initialization, overridden by subclasses"""
         pass
 
+    def serialize(self):
+        serialized = {}
+        for key in self.__serializable__:
+            func_name = 'serialize_' + key
+            func = getattr(self, func_name, None)
+            serialized[key] = getattr(self, key)
+            if callable(func):
+                serialized[key] = func(serialized[key])
+            elif hasattr(serialized[key], 'serialize'):
+                serialized[key] = serialized[key].serialize()
+        return serialized
+
+    def _serialize_datetime(self, value):
+        """
+        Return a time zone-aware ISO 8601 string.
+        """
+        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
+        return utc_time.isoformat()
+
     def validate(self):
         """
         Data validation, run before initialize(). May be overridden by
@@ -44,11 +64,21 @@ class BaseResource(object):
 
 class ModelRun(BaseResource):
     required_parameters = ['id', 'data_provider', 'reference_time', 'created_date', 'version', 'data']
+    __serializable__ = ['id', 'data_provider', 'reference_time', 'created_date', 'version', 'data']
 
     def initialize(self):
         self.reference_time = dateutil.parser.parse(self.reference_time)
         self.created_date = dateutil.parser.parse(self.created_date)
         self.data = [Data(x) for x in self.data]
+
+    def serialize_reference_time(self, value):
+        return self._serialize_datetime(value)
+
+    def serialize_created_date(self, value):
+        return self._serialize_datetime(value)
+
+    def serialize_data(self, value):
+        return [x.serialize() for x in value]
 
     def __repr__(self):
         return "ModelRun id=%d data_provider=%s reference_time=%s version=%d" % \
@@ -57,6 +87,7 @@ class ModelRun(BaseResource):
 
 class Data(BaseResource):
     required_parameters = ['id', 'model_run_id', 'format', 'href']
+    __serializable__ = ['id', 'model_run_id', 'format', 'href']
 
     def __repr__(self):
         return "Data id=%d model_run_id=%d format=%s href=%s" % \
