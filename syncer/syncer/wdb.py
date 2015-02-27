@@ -21,18 +21,13 @@ class WDB(object):
         loaded = 0
         logging.info("Starting loading to WDB: %s" % model_run)
 
-        data_uri_pattern = model.data_uri_pattern
+        dataset = model.get_matching_data(model_run.data)
 
-        for data in model_run.data:
-            data_uri = data.href
-
-            if re.search(data_uri_pattern, data_uri) is not None:
-                logging.info("Data URI '%s' matches regular expression '%s'" % (data_uri, data_uri_pattern))
-                modelfile = WDB.convert_opdata_uri_to_file(data_uri)
-                self.load_modelfile(model, model_run, modelfile)
-                loaded += 1
-            else:
-                logging.warn("Data URI '%s' does not match regular expression '%s'" % (data_uri, data_uri_pattern))
+        for data in dataset:
+            logging.info("Data URI '%s' matches regular expression '%s'" % (data.href, model.data_uri_pattern))
+            modelfile = WDB.convert_opdata_uri_to_file(data.href)
+            self.load_modelfile(model, model_run, modelfile)
+            loaded += 1
 
         if loaded:
             logging.info("Successfully finished loading %d files to WDB." % loaded)

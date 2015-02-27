@@ -4,6 +4,7 @@ import traceback
 import multiprocessing
 import logging
 import logging.config
+import re
 import sys
 import zmq
 import argparse
@@ -95,7 +96,7 @@ class Model(syncer.utils.SerializeBase):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
 
         data = {}
-        mandatory_options = ['data_provider', 'data_uri_pattern', 'load_program']
+        mandatory_options = ['data_provider', 'data_uri_pattern', 'data_file_count', 'load_program']
 
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
@@ -103,6 +104,7 @@ class Model(syncer.utils.SerializeBase):
                 raise ConfigParser.NoOptionError(option, section_name)
 
         data = config.section_options(section_name)
+        data['data_file_count'] = int(data['data_file_count'])
 
         return data
 
@@ -123,7 +125,7 @@ class Model(syncer.utils.SerializeBase):
         """
         Check that `model_run` is of the correct type.
         """
-        if not self._valid_model_run(model_run):
+        if model_run is not None and not self._valid_model_run(model_run):
             raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % sys._getframe().f_code.co_name)
 
     def set_available_model_run(self, model_run):
@@ -175,6 +177,23 @@ class Model(syncer.utils.SerializeBase):
         Returns True if the model run loaded into WDB has not been used to update WDB2TS yet.
         """
         return self.wdb_model_run != self.wdb2ts_model_run
+
+    def get_matching_data(self, dataset):
+        """
+        Return a subset of the list `dataset' that matches self.data_uri_pattern.
+        """
+        subset = []
+        for data in dataset:
+            if re.search(self.data_uri_pattern, data.href) is not None:
+                subset += [data]
+        return subset
+
+    def is_complete_dataset(self, dataset):
+        """
+        Returns True if get_matching_data(dataset) returns the amount of data
+        entries required by the data_file_count configuration option for this model.
+        """
+        return len(self.get_matching_data(dataset)) == self.data_file_count
 
     def _serialize_model_run(self, value):
         return value.serialize() if self._valid_model_run(value) else None
@@ -316,9 +335,13 @@ class Daemon:
         """
         Check if a model run contains data sets, and set it as an available model run
         """
-        if model_run is not None and len(model_run.data) == 0:
-            logging.warn("Model run contains no data, discarding.")
-            return
+        if model_run is not None:
+            if len(model_run.data) == 0:
+                logging.warn("Model run %s contains no data, discarding." % model_run.id)
+                return
+            if not model.is_complete_dataset(model_run.data):
+                logging.warn("Model run %s is not complete, discarding." % model_run.id)
+                return
         model.set_available_model_run(model_run)
         self.sync_zmq_status()
 
