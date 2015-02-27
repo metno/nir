@@ -478,6 +478,10 @@ def run(argv):
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
     tick = int(config.get('syncer', 'tick'))
 
+    # Instantiate REST API collection objects
+    model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
+    data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
+
     # Start the ZeroMQ modelstatus subscriber process
     zmq_subscriber_socket = config.get('zeromq', 'socket')
     zmq_subscriber = syncer.zeromq.ZMQSubscriber(zmq_subscriber_socket)
@@ -492,13 +496,13 @@ def run(argv):
     zmq_ctl_proc.start()
     logging.info("ZeroMQ controller socket listening for commands on %s" % zmq_controller_socket)
 
-    # Instantiate REST API collection objects
-    model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
-    data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
-
     # Start main application
-    daemon = Daemon(config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick)
-    exit_code = daemon.run()
+    try:
+        daemon = Daemon(config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick)
+        exit_code = daemon.run()
+    except:
+        zmq_ctl_proc.terminate()
+        raise
 
     return exit_code
 
