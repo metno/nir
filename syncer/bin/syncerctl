@@ -5,10 +5,7 @@ import zmq
 import json
 import argparse
 
-# Create socket and connect to service
-context = zmq.Context()
-sock = context.socket(zmq.REQ)
-sock.connect('tcp://localhost:5050')
+ZMQ_SOCK = 'tcp://localhost:5050'
 
 # Parse arguments
 parser = argparse.ArgumentParser()
@@ -23,9 +20,21 @@ cmd = args.command
 if args.data:
     cmd += ' ' + ' '.join(args.data)
 
+# Create socket and connect to service
+context = zmq.Context()
+sock = context.socket(zmq.REQ)
+sock.setsockopt(zmq.RCVTIMEO, 500)
+sock.setsockopt(zmq.SNDTIMEO, 500)
+sock.setsockopt(zmq.LINGER, 0)
+sock.connect(ZMQ_SOCK)
+
 # REQ/REP to ZeroMQ socket in Syncer
-sock.send_string(unicode(cmd))
-reply = sock.recv_json()
+try:
+    sock.send_string(unicode(cmd))
+    reply = sock.recv_json()
+except:
+    sys.stderr.write("Syncer isn't responding. Check that the program is running and listening on %s\n" % ZMQ_SOCK)
+    sys.exit(255)
 
 def get_model_run(model_run):
     return model_run if model_run and model_run != 'None' else None

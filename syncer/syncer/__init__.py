@@ -1,5 +1,6 @@
 # coding: utf-8
 
+import traceback
 import multiprocessing
 import logging
 import logging.config
@@ -515,7 +516,16 @@ def main(argv):
     logging.basicConfig(format=DEFAULT_LOG_FORMAT, level=DEFAULT_LOG_LEVEL)
     logging.info("Starting Syncer...")
 
-    exit_code = run(argv)
+    try:
+        exit_code = run(argv)
+    except:
+        exception = traceback.format_exc().split("\n")
+        logging.critical("***********************************************************")
+        logging.critical("Uncaught exception during program execution. THIS IS A BUG!")
+        logging.critical("***********************************************************")
+        for line in exception:
+            logging.critical(line)
+        exit_code = 255
 
     logging.info("Exiting with status %d", exit_code)
     sys.exit(exit_code)
