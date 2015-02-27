@@ -7,12 +7,13 @@ import requests
 import json
 import logging
 import dateutil.parser
-import dateutil.tz
 
+import syncer
+import syncer.utils
 import syncer.exceptions
 
 
-class BaseResource(object):
+class BaseResource(syncer.utils.SerializeBase):
     required_parameters = []
 
     def __init__(self, data):
@@ -30,25 +31,6 @@ class BaseResource(object):
     def initialize(self):
         """Do variable initialization, overridden by subclasses"""
         pass
-
-    def serialize(self):
-        serialized = {}
-        for key in self.__serializable__:
-            func_name = 'serialize_' + key
-            func = getattr(self, func_name, None)
-            serialized[key] = getattr(self, key)
-            if callable(func):
-                serialized[key] = func(serialized[key])
-            elif hasattr(serialized[key], 'serialize'):
-                serialized[key] = serialized[key].serialize()
-        return serialized
-
-    def _serialize_datetime(self, value):
-        """
-        Return a time zone-aware ISO 8601 string.
-        """
-        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
-        return utc_time.isoformat()
 
     def validate(self):
         """

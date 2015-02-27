@@ -55,20 +55,23 @@ def print_model(model):
     if model_run:
         print         "Most recent model run according to Syncer:"
         print_model_run(model_run)
+        print         "  updated         %s" % model['available_updated']
         if wdb_run and wdb_run['id'] == model_run['id']:
-            print     "  wdb             synchronized"
+            print     "  wdb in sync     %s" % model['wdb_updated']
             wdb_sync = True
         else:
             print     "  wdb             NOT synchronized"
         if wdb2ts_run and wdb2ts_run['id'] == model_run['id']:
-            print     "  wdb2ts          synchronized"
+            print     "  wdb2ts in sync  %s" % model['wdb2ts_updated']
             wdb2ts_sync = True
         else:
             print     "  wdb2ts          NOT synchronized"
+    else:
+        print         "No model run data available"
+        return
 
     if not wdb_sync:
-        if model_run:
-            print
+        print
         if wdb_run:
             print     "Model run in WDB:"
             print_model_run(wdb_run)
@@ -76,9 +79,9 @@ def print_model(model):
             print     "Current Syncer instance has not loaded this model into WDB."
 
     if not wdb2ts_sync:
-        if wdb_run:
-            if model_run or not wdb_sync:
-                print
+        if wdb_sync:
+            print
+        if wdb2ts_run:
             print     "Model run in WDB2TS:"
             print_model_run(wdb2ts_run)
         else:

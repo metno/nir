@@ -6,11 +6,13 @@ import logging.config
 import sys
 import zmq
 import argparse
+import datetime
 import ConfigParser
 
 import syncer.wdb
 import syncer.wdb2ts
 import syncer.rest
+import syncer.utils
 import syncer.zeromq
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
@@ -65,7 +67,10 @@ class Configuration:
         return dict(self.config_parser.items(section_name))
 
 
-class Model:
+class Model(syncer.utils.SerializeBase):
+    __serializable__ = ['data_provider', 'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
+                        'available_updated', 'wdb_updated', 'wdb2ts_updated']
+
     def __init__(self, data):
         [setattr(self, key, value) for key, value in data.iteritems()]
 
@@ -78,6 +83,11 @@ class Model:
 
         # Model run used to update WDB2TS
         self.wdb2ts_model_run = None
+
+        # Updated timestamps
+        self.available_updated = None
+        self.wdb_updated = None
+        self.wdb2ts_updated = None
 
     @staticmethod
     def data_from_config_section(config, section_name):
@@ -123,6 +133,7 @@ class Model:
         self._validate_model_run(model_run)
         self.available_model_run = model_run
         self._available_model_run_initialized = True
+        self.available_updated = datetime.datetime.now()
         if self.available_model_run:
             logging.info("Model %s has new model run: %s" % (self, self.available_model_run))
 
@@ -138,6 +149,7 @@ class Model:
         """
         self._validate_model_run(model_run)
         self.wdb_model_run = model_run
+        self.wdb_updated = datetime.datetime.now()
         logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.wdb_model_run))
 
     def set_wdb2ts_model_run(self, model_run):
@@ -146,6 +158,7 @@ class Model:
         """
         self._validate_model_run(model_run)
         self.wdb2ts_model_run = model_run
+        self.wdb2ts_updated = datetime.datetime.now()
         logging.info("Model %s has been updated in WDB2TS, model run: %s" % (self, self.wdb2ts_model_run))
 
     def has_pending_wdb_load(self):
@@ -162,18 +175,26 @@ class Model:
         """
         return self.wdb_model_run != self.wdb2ts_model_run
 
-    def serialize(self):
-        """
-        Return a representation of the model variables
-        """
-        data = {
-            'data_provider': self.data_provider,
-        }
-        for key in ['available_model_run', 'wdb_model_run', 'wdb2ts_model_run']:
-            object_ = getattr(self, key)
-            data[key] = object_.serialize() if self._valid_model_run(object_) else None
+    def _serialize_model_run(self, value):
+        return value.serialize() if self._valid_model_run(value) else None
 
-        return data
+    def serialize_available_model_run(self, value):
+        return self._serialize_model_run(value)
+
+    def serialize_wdb_model_run(self, value):
+        return self._serialize_model_run(value)
+
+    def serialize_wdb2ts_model_run(self, value):
+        return self._serialize_model_run(value)
+
+    def serialize_available_updated(self, value):
+        return self._serialize_datetime(value) if value else None
+
+    def serialize_wdb_updated(self, value):
+        return self._serialize_datetime(value) if value else None
+
+    def serialize_wdb2ts_updated(self, value):
+        return self._serialize_datetime(value) if value else None
 
     def __repr__(self):
         return self.data_provider
