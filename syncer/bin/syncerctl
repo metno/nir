@@ -9,14 +9,19 @@ ZMQ_SOCK = 'tcp://localhost:5050'
 
 # Parse arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('command', metavar='command', choices=['hello', 'status', 'load'], help='{%(choices)s}')
+parser.add_argument('command', metavar='command', choices=['hello', 'status', 'check', 'load'], help='{%(choices)s}')
 parser.add_argument('data', nargs='*')
 parser.add_argument('--full', action='store_true', help='Show all files belonging to data sets')
 parser.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
 args = parser.parse_args()
 
 # Assemble a command
-cmd = args.command
+if args.command == 'status':
+    cmd = 'status'
+elif args.command == 'check':
+    cmd = 'status'
+else:
+    cmd = args.command
 if args.data:
     cmd += ' ' + ' '.join(args.data)
 
@@ -96,11 +101,42 @@ def print_model(model):
         else:
             print     "Current Syncer instance has not updated this model in WDB2TS."
 
+def print_model_machine_readable(model):
+    model_run = get_model_run(model['available_model_run'])
+    wdb_run = get_model_run(model['wdb_model_run'])
+    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
+
+    line = [model['data_provider']]
+    if model_run:
+        line += [str(model_run['id']), model['available_updated']]
+    else:
+        line += ['-'] * 2
+
+    if wdb_run:
+        line += [str(wdb_run['id']), model['wdb_updated']]
+    else:
+        line += ['-'] * 2
+
+    if wdb2ts_run:
+        line += [str(wdb2ts_run['id']), model['wdb2ts_updated']]
+    else:
+        line += ['-'] * 2
+
+    print ';'.join(line)
+
 if args.command == 'status':
     for model in reply['data']:
         if not args.model or model['data_provider'] in args.model:
             print_model(model)
             print
+
+elif args.command == 'check':
+    sys.stderr.write("# data_provider; model_run_id; available_updated; wdb_run_id; wdb_updated; wdb2ts_run_id; wdb2ts_updated\n")
+    sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
+    for model in reply['data']:
+        if not args.model or model['data_provider'] in args.model:
+            print_model_machine_readable(model)
+
 else:
     for x in reply['data']:
         print x
