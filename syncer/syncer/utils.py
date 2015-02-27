@@ -24,4 +24,4 @@ class SerializeBase:
         Return a time zone-aware ISO 8601 string.
         """
         utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
-        return utc_time.isoformat()
+        return utc_time.isoformat().replace(' ', 'T').replace('+00:00', 'Z')
