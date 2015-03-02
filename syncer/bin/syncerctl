@@ -106,7 +106,7 @@ def print_model_machine_readable(model):
     wdb_run = get_model_run(model['wdb_model_run'])
     wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
 
-    line = [model['data_provider']]
+    line = [model['data_provider'], str(model['update_frequency'])]
     if model_run:
         line += [str(model_run['id']), model_run['reference_time'], model['available_updated']]
     else:
@@ -131,7 +131,7 @@ if args.command == 'status':
             print
 
 elif args.command == 'check':
-    sys.stderr.write("# data_provider; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
+    sys.stderr.write("# data_provider; update_frequency; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
     sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
     for model in reply['data']:
         if not args.model or model['data_provider'] in args.model:

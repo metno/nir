@@ -70,7 +70,8 @@ class Configuration:
 
 
 class Model(syncer.utils.SerializeBase):
-    __serializable__ = ['data_provider', 'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
+    __serializable__ = ['data_provider', 'update_frequency',
+                        'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
                         'available_updated', 'wdb_updated', 'wdb2ts_updated']
 
     def __init__(self, data):
@@ -96,7 +97,7 @@ class Model(syncer.utils.SerializeBase):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
 
         data = {}
-        mandatory_options = ['data_provider', 'data_uri_pattern', 'data_file_count', 'load_program']
+        mandatory_options = ['data_provider', 'data_uri_pattern', 'data_file_count', 'load_program', 'update_frequency']
 
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
@@ -105,6 +106,7 @@ class Model(syncer.utils.SerializeBase):
 
         data = config.section_options(section_name)
         data['data_file_count'] = int(data['data_file_count'])
+        data['update_frequency'] = int(data['update_frequency'])
 
         return data
 

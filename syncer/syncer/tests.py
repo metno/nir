@@ -26,6 +26,7 @@ data_provider=arome_metcoop_2500m
 data_provider_group=arome
 data_file_count=1
 data_uri_pattern=(arome_metcoop|bar??)
+update_frequency=6
 load_program=netcdfLoad
 load_config=/etc/netcdfload/arome.config
 
@@ -72,6 +73,7 @@ VALID_MODEL_FIXTURE = {
     'data_provider_group': 'arome',
     'data_file_count': 1,
     'data_uri_pattern': '(arome_metcoop|bar??)',
+    'update_frequency': 6,
     'load_program': 'netcdfLoad',
     'load_config': '/etc/netcdfload/arome.config'
 }
