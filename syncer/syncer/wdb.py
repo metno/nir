@@ -8,6 +8,39 @@ import logging
 
 import syncer.exceptions
 
+# Success
+EXIT_SUCCESS = 0
+
+# Unknown error - something no one anticipated
+EXIT_UNKNOWN = 1
+
+# Unable to connect to database
+EXIT_DATABASE_CONNECT = 10
+
+# Error when attempting to read from database
+EXIT_DATABASE_READ = 11
+
+# Error when updating database metadata
+EXIT_DATABASE_METADATA = 12
+
+# Unable to load any fields at all
+EXIT_LOAD = 13
+
+# Unable to read file
+EXIT_FILE_OPEN = 20
+
+# Error when reading from file
+EXIT_FILE_READ = 21
+
+# Invalid command line arguments
+EXIT_SYNTAX = 30
+
+# Error when attempting to read a configuration file
+EXIT_CONFIG = 31
+
+# One or more fields failed to load, but some may have loaded successfully
+EXIT_FIELDS = 100
+
 
 class WDB(object):
 
@@ -47,15 +80,19 @@ class WDB(object):
         except TypeError, e:
             raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
-        if stderr is not None:
-            lines = stderr.splitlines()
-            if lines:
-                logging.warning("WDB load might have failed due to the following messages in stderr:")
-                for line in lines:
-                    logging.warning("WDB load error: " + line)
+        if exit_code != EXIT_SUCCESS:
+            if exit_code == EXIT_FIELDS or exit_code == EXIT_LOAD:
+                logging.error("Failed to load some fields into WDB. This is likely due to duplicate field errors, i.e. loading the same data twice.")
+                logging.warn("STDERR output from WDB suppressed because exit code equals %d" % exit_code)
+            else:
+                if stderr is not None:
+                    lines = stderr.splitlines()
+                    if lines:
+                        logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
+                        for line in lines:
+                            logging.warning("WDB load error: " + line)
 
-        if exit_code > 0:
-            raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
+                raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
 
         logging.info("Loading completed.")
 
