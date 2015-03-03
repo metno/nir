@@ -311,27 +311,68 @@ class ZeroMQTest(unittest.TestCase):
         self.zmq = syncer.zeromq.ZMQSubscriber('ipc://test_zmq')
         self.controller = syncer.zeromq.ZMQController('ipc://test_ctl')
 
-    def test_decode_event_ok(self):
-        string = 'foo 123'
-        event = self.zmq.decode_event(string)
+    def test_zmqevent_ok(self):
+        data = {
+            'version': [1, 0, 0],
+            'resource': 'foo',
+            'id': 123,
+        }
+        event = syncer.zeromq.ZMQEvent(**data)
         self.assertEqual(event.resource, 'foo')
         self.assertEqual(event.id, 123)
+        self.assertEqual(event.version, [1, 0, 0])
 
-    def test_decode_event_invalid_id(self):
-        string = 'foo bar'
-        event = self.zmq.decode_event(string)
-        self.assertIsNone(event)
+    def test_zmqevent_invalid_id(self):
+        data = {
+            'version': [1, 0, 0],
+            'resource': 'foo',
+            'id': 'bar',
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventBadId):
+            syncer.zeromq.ZMQEvent(**data)
 
-    def test_decode_event_invalid_format(self):
-        string = 'foobar'
-        event = self.zmq.decode_event(string)
-        self.assertIsNone(event)
+    def test_zmqevent_invalid_resource(self):
+        data = {
+            'version': [1, 0, 0],
+            'resource': '',
+            'id': 9,
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventBadResource):
+            syncer.zeromq.ZMQEvent(**data)
 
-    def test_zmqevent_class(self):
-        event = syncer.zeromq.ZMQEvent(id=123, resource='foo', bar='baz')
-        self.assertEqual(event.bar, 'baz')
-        self.assertEqual(event.resource, 'foo')
-        self.assertEqual(event.id, 123)
+    def test_zmqevent_missing_id(self):
+        data = {
+            'version': [1, 0, 0],
+            'resource': 'foo',
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventIncomplete):
+            syncer.zeromq.ZMQEvent(**data)
+
+    def test_zmqevent_missing_resource(self):
+        data = {
+            'version': [1, 0, 0],
+            'id': 456,
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventIncomplete):
+            syncer.zeromq.ZMQEvent(**data)
+
+    def test_zmqevent_unsupported_version(self):
+        data = {
+            'version': [2, 1, 3],
+            'resource': 'foo',
+            'id': 456,
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventUnsupportedVersion):
+            syncer.zeromq.ZMQEvent(**data)
+
+    def test_zmqevent_bad_version(self):
+        data = {
+            'version': 'bleeding edge',
+            'resource': 'foo',
+            'id': 456,
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventUnsupportedVersion):
+            syncer.zeromq.ZMQEvent(**data)
 
     def test_command_non_existing(self):
         data = self.controller.exec_command(['foobarbaz'])

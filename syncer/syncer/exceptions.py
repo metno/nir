@@ -86,3 +86,28 @@ class WDB2TSClientUpdateFailure(WDB2TSClientException):
 class WDB2TSServerUpdateFailure(WDB2TSServerException):
     """Thrown when an update request to wdb2ts failed"""
     pass
+
+
+class ZMQEventException(Exception):
+    """Base class fro ZeroMQ Event exceptions"""
+    pass
+
+
+class ZMQEventIncomplete(ZMQEventException):
+    """Thrown when a ZMQEvent does not have all required data fields"""
+    pass
+
+
+class ZMQEventUnsupportedVersion(ZMQEventException):
+    """Thrown when a ZMQEvent is instantiated with an unsupported or erroneous version"""
+    pass
+
+
+class ZMQEventBadId(ZMQEventException):
+    """Thrown when a ZMQEvent's 'id' field is of incorrect type"""
+    pass
+
+
+class ZMQEventBadResource(ZMQEventException):
+    """Thrown when a ZMQEvent's 'resource' field is of incorrect type"""
+    pass

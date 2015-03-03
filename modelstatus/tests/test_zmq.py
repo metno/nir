@@ -28,5 +28,9 @@ class TestZmq(modelstatus.tests.test_utils.TestBase):
     def test_message_from_resource(self):
         object_ = self.orm.query(modelstatus.orm.ModelRun).get(1)
         zmq_msg = self.zmq.message_from_resource(object_)
-        target_msg = 'model_run 1'
+        target_msg = {
+            'version': [1, 0, 0],
+            'resource': 'model_run',
+            'id': 1,
+        }
         self.assertEqual(zmq_msg, target_msg)
