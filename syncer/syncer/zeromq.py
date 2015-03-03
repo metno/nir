@@ -224,7 +224,6 @@ class ZMQController(ZMQBase):
             events = dict(self.poller.poll())
             if self.sock in events:
                 command = self.sock.recv_string()
-                logging.info("Received remote command: %s", command)
                 tokens = self.tokenize(command)
                 self.sock.send_json(self.exec_command(tokens))
             if self.rep in events:
