@@ -1,4 +1,12 @@
+import datetime
 import dateutil.tz
+
+
+def get_utc_now():
+    """
+    Return a time-zone aware DateTime object with the current date and time
+    """
+    return datetime.datetime.utcnow().replace(tzinfo=dateutil.tz.tzutc())
 
 
 class SerializeBase:
@@ -23,5 +31,5 @@ class SerializeBase:
         """
         Return a time zone-aware ISO 8601 string.
         """
-        utc_time = value.replace(tzinfo=dateutil.tz.tzutc())
+        utc_time = value.astimezone(tz=dateutil.tz.tzutc())
         return utc_time.isoformat().replace(' ', 'T').replace('+00:00', 'Z')

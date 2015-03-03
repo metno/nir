@@ -8,7 +8,6 @@ import re
 import sys
 import zmq
 import argparse
-import datetime
 import ConfigParser
 
 import syncer.wdb
@@ -138,7 +137,7 @@ class Model(syncer.utils.SerializeBase):
         self._validate_model_run(model_run)
         self.available_model_run = model_run
         self._available_model_run_initialized = True
-        self.available_updated = datetime.datetime.now()
+        self.available_updated = syncer.utils.get_utc_now()
         if self.available_model_run:
             logging.info("Model %s has new model run: %s" % (self, self.available_model_run))
 
@@ -154,7 +153,7 @@ class Model(syncer.utils.SerializeBase):
         """
         self._validate_model_run(model_run)
         self.wdb_model_run = model_run
-        self.wdb_updated = datetime.datetime.now()
+        self.wdb_updated = syncer.utils.get_utc_now()
         logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.wdb_model_run))
 
     def set_wdb2ts_model_run(self, model_run):
@@ -163,7 +162,7 @@ class Model(syncer.utils.SerializeBase):
         """
         self._validate_model_run(model_run)
         self.wdb2ts_model_run = model_run
-        self.wdb2ts_updated = datetime.datetime.now()
+        self.wdb2ts_updated = syncer.utils.get_utc_now()
         logging.info("Model %s has been updated in WDB2TS, model run: %s" % (self, self.wdb2ts_model_run))
 
     def has_pending_wdb_load(self):

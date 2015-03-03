@@ -5,11 +5,13 @@ import unittest
 import ConfigParser
 import StringIO
 import datetime
+import dateutil
 
 import syncer
 import syncer.wdb
 import syncer.wdb2ts
 import syncer.rest
+import syncer.utils
 import syncer.exceptions
 
 config_file_contents = """
@@ -77,6 +79,26 @@ VALID_MODEL_FIXTURE = {
     'load_program': 'netcdfLoad',
     'load_config': '/etc/netcdfload/arome.config'
 }
+
+
+class SerializeBaseTest(unittest.TestCase):
+    def setUp(self):
+        self.class_ = syncer.utils.SerializeBase()
+
+    def test_serialize_datetime_utc(self):
+        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.tzutc())
+        dt_string = self.class_._serialize_datetime(dt)
+        self.assertEqual(dt_string, '1970-01-01T01:01:01Z')
+
+    def test_serialize_datetime_cet(self):
+        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.gettz('GMT+01'))
+        dt_string = self.class_._serialize_datetime(dt)
+        self.assertEqual(dt_string, '1970-01-01T00:01:01Z')
+
+    def test_serialize_datetime_reject_naive(self):
+        dt = datetime.datetime.utcfromtimestamp(3661)
+        with self.assertRaises(ValueError):
+            self.class_._serialize_datetime(dt)
 
 
 class SyncerTest(unittest.TestCase):
