@@ -17,6 +17,4 @@ To run Syncer, you'll need to install the package `python-lxml` through your pac
 
 ### Setup the environment
 
-To setup and install requirements, run `./setup.py develop` for syncer.
-For modelstatus run `./bootstrap.sh <virtualenv-dir>`
-
+To setup and install requirements, run `syncer/setup.py develop` and `modelstatus/setup.py develop`.

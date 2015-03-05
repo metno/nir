@@ -1,0 +1,14 @@
+#!/usr/bin/env python2.7
+
+import os
+import sys
+import runpy
+
+root_path = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/..')
+sys.path.append(root_path)
+
+import unittest
+
+loader = unittest.TestLoader()
+test_suite = loader.discover(root_path)
+unittest.TextTestRunner().run(test_suite)

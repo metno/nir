@@ -13,8 +13,6 @@ import modelstatus.api.helloworld
 import modelstatus.api.modelrun
 import modelstatus.api.data
 
-import wsgiref.simple_server
-
 DEFAULT_CONFIG_PATH = '/etc/modelstatus.ini'
 DEFAULT_LOG_LEVEL = 'DEBUG'
 DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
@@ -69,12 +67,12 @@ def start_api(config_parser):
     return application
 
 
-def main():
+def main(arguments):
     """Set up default initial logging, in case something goes wrong during config parsing."""
 
     logging.basicConfig(format=DEFAULT_LOG_FORMAT, level=DEFAULT_LOG_LEVEL)
 
-    args = parse_arguments(sys.argv[1:])
+    args = parse_arguments(arguments)
     config_file = args.config
 
     try:
@@ -93,9 +91,3 @@ def main():
     logging.info("Configuration file has been successfully read.")
 
     return start_api(config_parser)
-
-if __name__ == '__main__':
-
-    app = main()
-    httpd = wsgiref.simple_server.make_server('0.0.0.0', 8000, app)
-    httpd.serve_forever()

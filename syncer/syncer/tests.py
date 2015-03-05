@@ -91,7 +91,7 @@ class SerializeBaseTest(unittest.TestCase):
         self.assertEqual(dt_string, '1970-01-01T01:01:01Z')
 
     def test_serialize_datetime_cet(self):
-        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.gettz('GMT+01'))
+        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.gettz('Europe/Oslo'))
         dt_string = self.class_._serialize_datetime(dt)
         self.assertEqual(dt_string, '1970-01-01T00:01:01Z')
 
