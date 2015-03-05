@@ -11,7 +11,6 @@ setup(
         "Cython==0.21.2",
         "SQLAlchemy==0.9.8",
         "argparse==1.2.1",
-        "distribute==0.6.24",
         "extras==0.0.3",
         "falcon==0.1.10",
         "psycopg2==2.5.4",
