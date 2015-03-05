@@ -199,6 +199,19 @@ class WDBTest(unittest.TestCase):
         filepath = syncer.wdb.WDB.convert_opdata_uri_to_file('opdata:///nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
         self.assertEqual(filepath, '/opdata/nwparc/eps25/eps25_lqqt_probandltf_1_2015012600Z.nc')
 
+    def test_create_cache_query(self):
+        query = syncer.wdb.WDB.create_cache_query(self.model_run)
+        self.assertEqual(query, "SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['arome_metcoop_2500m'], NULL, 'exact 2015-01-19T16:04:40Z', NULL, NULL, NULL, array[-1])")
+
+    def test_create_analyze_query(self):
+        query = syncer.wdb.WDB.create_analyze_query()
+        self.assertEqual(query, "ANALYZE")
+
+    def test_create_cache_model_run_command(self):
+        cmd_list = self.wdb.create_cache_model_run_command(self.model_run)
+        cmd = ' '.join(cmd_list)
+        self.assertEqual(cmd, "ssh test@localhost psql -c \"SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['arome_metcoop_2500m'], NULL, 'exact 2015-01-19T16:04:40Z', NULL, NULL, NULL, array[-1]); ANALYZE;\"")
+
 
 class CollectionTest(unittest.TestCase):
     BASE_URL = 'http://localhost'

@@ -33,6 +33,11 @@ class WDBLoadFailed(Exception):
     pass
 
 
+class WDBCacheFailed(Exception):
+    """Thrown when WDB can't cache data."""
+    pass
+
+
 class OpdataURIException(Exception):
     """Thrown when the uri given is not a correct opdata uri."""
     pass

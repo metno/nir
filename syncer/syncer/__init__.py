@@ -354,6 +354,7 @@ class Daemon:
 
         try:
             self.wdb.load_model_run(model, model.available_model_run)
+            self.wdb.cache_model_run(model.available_model_run)
             model.set_wdb_model_run(model.available_model_run)
             self.sync_zmq_status()
 
@@ -361,6 +362,8 @@ class Daemon:
             logging.error("WDB load failed: %s" % e)
         except syncer.exceptions.OpdataURIException, e:
             logging.error("Failed to load some model data due to erroneous opdata uri: %s" % e)
+        except syncer.exceptions.WDBCacheFailed, e:
+            logging.error("Failed to cache model data, will try loading again: %s" % e)
 
     def update_wdb2ts(self, model):
         """

@@ -85,16 +85,21 @@ class WDB(object):
                 logging.error("Failed to load some fields into WDB. This is likely due to duplicate field errors, i.e. loading the same data twice.")
                 logging.warn("STDERR output from WDB suppressed because exit code equals %d" % exit_code)
             else:
-                if stderr is not None:
-                    lines = stderr.splitlines()
-                    if lines:
-                        logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
-                        for line in lines:
-                            logging.warning("WDB load error: " + line)
+                lines = self.get_std_lines(stderr)
+                if lines:
+                    logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
+                    for line in lines:
+                        logging.warning("WDB load error: " + line)
 
                 raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
 
         logging.info("Loading completed.")
+
+    def get_std_lines(self, std):
+        """
+        Return a list of lines from stderr or stdout
+        """
+        return std.splitlines() if std is not None else []
 
     @staticmethod
     def execute_command(cmd):
@@ -146,3 +151,52 @@ class WDB(object):
         data_file_path = re.sub(r'^opdata\:\/\/\/', '/opdata/', data_uri)
 
         return data_file_path
+
+    @staticmethod
+    def create_cache_query(model_run):
+        """
+        Generate a SQL/WCI query that caches a specific model run.
+        """
+        # SQL injection attacks would have to be configured in the
+        # configuration file, as data_provider to the model in question.
+        # Modelstatus would likely not contain information about such a model,
+        # making it extremely unlikely that any malicious code could run here.
+        return "SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
+            'data_provider': model_run.data_provider,
+            'reference_time': model_run.serialize_reference_time(model_run.reference_time),
+        }
+
+    @staticmethod
+    def create_analyze_query():
+        return 'ANALYZE'
+
+    def create_cache_model_run_command(self, model_run):
+        """
+        Create an SSH command that runs cacheQuery and ANALYZE against the WDB
+        server for the specified model run.
+        """
+        cache_query = WDB.create_cache_query(model_run)
+        analyze_query = WDB.create_analyze_query()
+        return self.create_ssh_command(['psql', '-c', "\"%s; %s;\"" % (cache_query, analyze_query)])
+
+    def cache_model_run(self, model_run):
+        """
+        Run cacheQuery and ANALYZE against the WDB server for the specified model run.
+        """
+        logging.info("Updating WDB cache for %s" % model_run)
+
+        cmd = self.create_cache_model_run_command(model_run)
+        exit_code, stderr, stdout = WDB.execute_command(cmd)
+
+        if exit_code == 0:
+            logging.info("Cache updated successfully.")
+            return
+
+        logging.error("Cache update failed with exit status %d" % exit_code)
+
+        for output in stdout, stderr:
+            lines = self.get_std_lines(stdout)
+            if lines:
+                [logging.debug(line) for line in lines]
+
+        raise syncer.exceptions.WDBCacheFailed("Cache update failed with exit status %d" % exit_code)
