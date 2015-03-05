@@ -247,7 +247,7 @@ class DaemonTest(unittest.TestCase):
         models = set()
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         data_collection = syncer.rest.DataCollection('http://localhost', True)
-        zmq_subscriber = syncer.zeromq.ZMQSubscriber('ipc://null')
+        zmq_subscriber = syncer.zeromq.ZMQSubscriber('ipc://null', 30, 30)
         zmq_agent = syncer.zeromq.ZMQAgent()
         tick = 300
         syncer.Daemon(self.config, models, zmq_subscriber, zmq_agent, self.wdb, self.wdb2ts, model_run_collection, data_collection, tick)
@@ -343,7 +343,7 @@ class ZeroMQTest(unittest.TestCase):
     Tests the ZeroMQ classes
     """
     def setUp(self):
-        self.zmq = syncer.zeromq.ZMQSubscriber('ipc://test_zmq')
+        self.zmq = syncer.zeromq.ZMQSubscriber('ipc://test_zmq', 30, 30)
         self.controller = syncer.zeromq.ZMQController('ipc://test_ctl')
 
     def test_zmqevent_ok(self):

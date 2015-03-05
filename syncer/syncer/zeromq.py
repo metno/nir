@@ -64,9 +64,13 @@ class ZMQEvent(ZMQBase):
 
 
 class ZMQSubscriber(ZMQBase):
-    def __init__(self, addr):
+    def __init__(self, addr, tcp_keepalive_interval, tcp_keepalive_count):
         self.context = zmq.Context()
         self.sock = self.context.socket(zmq.SUB)
+        self.sock.setsockopt(zmq.TCP_KEEPALIVE, 1)                             # enable TCP keepalive
+        self.sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, tcp_keepalive_interval)   # keepalive packet sent each N seconds
+        self.sock.setsockopt(zmq.TCP_KEEPALIVE_INTVL, tcp_keepalive_interval)  # keepalive packet sent each N seconds
+        self.sock.setsockopt(zmq.TCP_KEEPALIVE_CNT, tcp_keepalive_count)       # number of missed packets to mark connection as dead
         self.sock.connect(addr)
         self.sock.setsockopt_string(zmq.SUBSCRIBE, u'')
 
@@ -76,7 +80,8 @@ class ZMQSubscriber(ZMQBase):
         """
         try:
             msg = self.sock.recv_json(zmq.NOBLOCK)
-        except zmq.ZMQError:
+        except zmq.ZMQError, e:
+            logging.debug("%s in ZMQSubscriber.recv(): %s" % (type(e), unicode(e)))
             msg = None
         return msg
 

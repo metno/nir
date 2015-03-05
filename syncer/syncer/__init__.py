@@ -511,8 +511,10 @@ def run(argv):
 
     # Start the ZeroMQ modelstatus subscriber process
     zmq_subscriber_socket = config.get('zeromq', 'socket')
-    zmq_subscriber = syncer.zeromq.ZMQSubscriber(zmq_subscriber_socket)
-    logging.info("ZeroMQ subscriber listening for events from %s" % zmq_subscriber_socket)
+    tcp_keepalive_interval = int(config.get('zeromq', 'tcp_keepalive_interval'))
+    tcp_keepalive_count = int(config.get('zeromq', 'tcp_keepalive_count'))
+    zmq_subscriber = syncer.zeromq.ZMQSubscriber(zmq_subscriber_socket, tcp_keepalive_interval, tcp_keepalive_count)
+    logging.info("ZeroMQ subscriber listening for events from %s, TCP keepalive interval=%d count=%d" % (zmq_subscriber_socket, tcp_keepalive_interval, tcp_keepalive_count))
 
     # Instantiate ZeroMQ agent class
     zmq_agent = syncer.zeromq.ZMQAgent()
