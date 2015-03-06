@@ -28,7 +28,8 @@ data_provider=arome_metcoop_2500m
 data_provider_group=arome
 data_file_count=1
 data_uri_pattern=(arome_metcoop|bar??)
-update_frequency=6
+model_run_age_warning=30
+model_run_age_critical=60
 load_program=netcdfLoad
 load_config=/etc/netcdfload/arome.config
 
@@ -75,7 +76,8 @@ VALID_MODEL_FIXTURE = {
     'data_provider_group': 'arome',
     'data_file_count': 1,
     'data_uri_pattern': '(arome_metcoop|bar??)',
-    'update_frequency': 6,
+    'model_run_age_warning': 30,
+    'model_run_age_critical': 60,
     'load_program': 'netcdfLoad',
     'load_config': '/etc/netcdfload/arome.config'
 }
@@ -283,6 +285,33 @@ class ModelTest(unittest.TestCase):
         model = self.get_model()
         for key, value in VALID_MODEL_FIXTURE.iteritems():
             self.assertEqual(getattr(model, key), value)
+
+    def test_instantiate_no_model_run_age_threshold(self):
+        fixture = copy.deepcopy(VALID_MODEL_FIXTURE)
+        del fixture['model_run_age_warning']
+        del fixture['model_run_age_critical']
+        syncer.Model(fixture)
+
+    def test_serialize(self):
+        model = self.get_model()
+        serialized = model.serialize()
+        for key in [
+                'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
+                'available_updated', 'wdb_updated', 'wdb2ts_updated']:
+            self.assertEqual(serialized[key], None)
+            del serialized[key]
+        for key, value in serialized.iteritems():
+            self.assertEqual(serialized[key], VALID_MODEL_FIXTURE[key])
+
+    def test_serialize_missing_values(self):
+        fixture = copy.deepcopy(VALID_MODEL_FIXTURE)
+        params = ['model_run_age_warning', 'model_run_age_critical']
+        for param in params:
+            del fixture[param]
+        model = syncer.Model(fixture)
+        serialized = model.serialize()
+        for param in params:
+            self.assertEqual(serialized[param], None)
 
     def test_data_from_config_section_missing_key(self):
         with self.assertRaises(ConfigParser.NoOptionError):

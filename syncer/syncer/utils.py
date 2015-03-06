@@ -20,7 +20,7 @@ class SerializeBase:
         for key in self.__serializable__:
             func_name = 'serialize_' + key
             func = getattr(self, func_name, None)
-            serialized[key] = getattr(self, key)
+            serialized[key] = getattr(self, key, None)
             if callable(func):
                 serialized[key] = func(serialized[key])
             elif hasattr(serialized[key], 'serialize'):
