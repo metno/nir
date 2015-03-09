@@ -468,12 +468,12 @@ class ZeroMQTest(unittest.TestCase):
             syncer.zeromq.ZMQEvent(**data)
 
     def test_command_non_existing(self):
-        data = self.controller.exec_command(['foobarbaz'])
+        data = self.controller.exec_command({'command': 'foobarbaz'})
         self.assertEqual(data['status'], 2)
-        self.assertEqual(data['data'], ['Invalid command'])
+        self.assertEqual(data['data'], [u"Invalid command 'foobarbaz'"])
 
     def test_command_hello(self):
-        data = self.controller.exec_command(['hello'])
+        data = self.controller.exec_command({'command': 'hello'})
         self.assertEqual(data['status'], 0)
         self.assertEqual(data['data'], ['Hello, world!'])
 

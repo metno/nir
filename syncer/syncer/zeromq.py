@@ -22,9 +22,6 @@ class ZMQBase(object):
             'data': data
         }
 
-    def tokenize(self, s):
-        return s.strip().split(' ')
-
 
 class ZMQEvent(ZMQBase):
     def __init__(self, **kwargs):
@@ -136,7 +133,7 @@ class ZMQAgent(ZMQBase):
         self.req.recv()
 
     def get_command(self):
-        return self.tokenize(self.rep.recv_string())
+        return self.rep.recv_json()
 
     def send_command_response(self, status, data):
         return self.rep.send_json(self.make_reply(status, data))
@@ -196,26 +193,26 @@ class ZMQController(ZMQBase):
         (Re)-load a model run into WDB.
         """
         model_run_id = int(model_run_id)
-        return self.exec_syncer('load %d' % model_run_id)
+        return self.exec_syncer({'command': 'load', 'model_run_id': model_run_id})
 
     def exec_syncer(self, command):
         """
         Send a command to Syncer.
         """
-        self.req.send_string(unicode(command))
+        self.req.send_json(command)
         return self.req.recv_json()
 
     def exec_command(self, tokens):
         try:
-            if len(tokens) == 0:
-                raise Exception('Empty command list')
-            if tokens[0] == 'hello':
+            if 'command' not in tokens:
+                raise Exception('Missing command')
+            if tokens['command'] == 'hello':
                 return self.run_hello()
-            if tokens[0] == 'status':
+            if tokens['command'] == 'status':
                 return self.run_status()
-            if tokens[0] == 'load':
-                return self.run_load(tokens[1])
-            raise Exception('Invalid command')
+            if tokens['command'] == 'load':
+                return self.run_load(tokens['model_run_id'])
+            raise Exception("Invalid command '%s'" % tokens['command'])
         except Exception, e:
             return self.make_reply(self.STATUS_INVALID, [unicode(e)])
 
@@ -228,9 +225,12 @@ class ZMQController(ZMQBase):
         while True:
             events = dict(self.poller.poll())
             if self.sock in events:
-                command = self.sock.recv_string()
-                tokens = self.tokenize(command)
-                self.sock.send_json(self.exec_command(tokens))
+                try:
+                    tokens = self.sock.recv_json()
+                    self.sock.send_json(self.exec_command(tokens))
+                except ValueError:
+                    logging.warning("Some perpetrator is sending non-JSON data to the ZeroMQ control socket, message ignored.")
+                    self.sock.send_string(u'go away')
             if self.rep in events:
                 self.status = self.rep.recv_json()
                 self.rep.send(b'')

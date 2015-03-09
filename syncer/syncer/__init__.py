@@ -357,12 +357,11 @@ class Daemon:
         Execute a command from the internal command queue.
         This input is already sanitized.
         """
-        logging.info("Executing remote command: %s", ' '.join(tokens))
+        logging.info("Executing remote command: %s" % tokens)
 
-        if tokens[0] == 'load':
-            id = int(tokens[1])
-            self.zmq_agent.send_command_response(self.zmq_agent.STATUS_OK, ['Model run %d scheduled for loading' % id])
-            self.load_model_run(id)
+        if tokens['command'] == 'load':
+            self.zmq_agent.send_command_response(self.zmq_agent.STATUS_OK, ['Model run %d scheduled for loading' % tokens['model_run_id']])
+            self.load_model_run(tokens['model_run_id'])
             return
 
         self.zmq_agent.send_command_response(self.zmq_agent.STATUS_INVALID, ['command not recognized'])
