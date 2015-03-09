@@ -91,6 +91,9 @@ class Model(syncer.utils.SerializeBase):
         self.wdb_updated = None
         self.wdb2ts_updated = None
 
+        # Internal version increments of datasets
+        self.model_run_version = {}
+
     @staticmethod
     def data_from_config_section(config, section_name):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
@@ -198,6 +201,35 @@ class Model(syncer.utils.SerializeBase):
         entries required by the data_file_count configuration option for this model.
         """
         return len(self.get_matching_data(dataset)) == self.data_file_count
+
+    def get_model_run_key(self, model_run):
+        """
+        Return a compound key used for identifying a unique reference time and
+        data provider combination used in a specific model run.
+        """
+        return (model_run.data_provider, model_run.reference_time)
+
+    def set_model_run_version(self, model_run, version):
+        """
+        Set the internal version of a model run.
+        """
+        key = self.get_model_run_key(model_run)
+        self.model_run_version[key] = version
+
+    def get_model_run_version(self, model_run):
+        """
+        Return the internal version of the specified model run.
+        """
+        key = self.get_model_run_key(model_run)
+        if key not in self.model_run_version:
+            return 0
+        return self.model_run_version[key]
+
+    def increment_model_run_version(self, model_run):
+        """
+        Increment the internal model run version counter by one.
+        """
+        self.set_model_run_version(model_run, self.get_model_run_version(model_run) + 1)
 
     def _serialize_model_run(self, value):
         return value.serialize() if self._valid_model_run(value) else None
@@ -346,6 +378,9 @@ class Daemon:
             if not model.is_complete_dataset(model_run.data):
                 logging.warn("Model run %s is not complete, discarding." % model_run.id)
                 return
+
+            model.increment_model_run_version(model_run)
+
         model.set_available_model_run(model_run)
         self.sync_zmq_status()
 

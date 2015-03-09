@@ -349,6 +349,35 @@ class ModelTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             model.set_wdb2ts_model_run(model_run)
 
+    def test_get_model_run_key(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        key = model.get_model_run_key(model_run)
+        self.assertEqual(len(key), 2)
+        self.assertEqual(key[0], 'arome_metcoop_2500m')
+        self.assertEqual(key[1].strftime('%Y-%m-%dT%H:%M:%SZ'), VALID_MODEL_RUN_FIXTURE['reference_time'])
+
+    def test_get_model_run_version(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        version = model.get_model_run_version(model_run)
+        self.assertEqual(version, 0)
+
+    def test_set_model_run_version(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        ref_version = 1337
+        model.set_model_run_version(model_run, ref_version)
+        version = model.get_model_run_version(model_run)
+        self.assertEqual(version, ref_version)
+
+    def test_increment_model_run_version(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.increment_model_run_version(model_run)
+        version = model.get_model_run_version(model_run)
+        self.assertEqual(version, 1)
+
 
 class ModelRunTest(unittest.TestCase):
     """Tests the syncer.rest.ModelRun resource"""
