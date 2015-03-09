@@ -7,39 +7,35 @@ import argparse
 
 ZMQ_SOCK = 'tcp://localhost:5050'
 
-# Parse arguments
-parser = argparse.ArgumentParser()
-parser.add_argument('command', metavar='command', choices=['hello', 'status', 'check', 'load'], help='{%(choices)s}')
-parser.add_argument('data', nargs='*')
-parser.add_argument('--full', action='store_true', help='Show all files belonging to data sets')
-parser.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
-args = parser.parse_args()
+def get_zeromq_sock():
+    """
+    Create ZeroMQ socket, connect to Syncer
+    """
+    context = zmq.Context()
+    sock = context.socket(zmq.REQ)
+    sock.setsockopt(zmq.RCVTIMEO, 500)
+    sock.setsockopt(zmq.SNDTIMEO, 500)
+    sock.setsockopt(zmq.LINGER, 0)
+    sock.connect(ZMQ_SOCK)
+    return sock
 
-# Assemble a command
-if args.command == 'status':
-    cmd = 'status'
-elif args.command == 'check':
-    cmd = 'status'
-else:
-    cmd = args.command
-if args.data:
-    cmd += ' ' + ' '.join(args.data)
+def send_recv_zeromq(sock, data):
+    """
+    REQ/REP to ZeroMQ socket in Syncer
+    """
+    try:
+        sock.send_string(unicode(data))
+        return sock.recv_json()
+    except:
+        sys.stderr.write("Syncer isn't responding. Check that the program is running and listening on %s\n" % ZMQ_SOCK)
+        sys.exit(255)
 
-# Create socket and connect to service
-context = zmq.Context()
-sock = context.socket(zmq.REQ)
-sock.setsockopt(zmq.RCVTIMEO, 500)
-sock.setsockopt(zmq.SNDTIMEO, 500)
-sock.setsockopt(zmq.LINGER, 0)
-sock.connect(ZMQ_SOCK)
-
-# REQ/REP to ZeroMQ socket in Syncer
-try:
-    sock.send_string(unicode(cmd))
-    reply = sock.recv_json()
-except:
-    sys.stderr.write("Syncer isn't responding. Check that the program is running and listening on %s\n" % ZMQ_SOCK)
-    sys.exit(255)
+def send_recv(data):
+    """
+    Shortcut to the above functions
+    """
+    sock = get_zeromq_sock()
+    return send_recv_zeromq(sock, data)
 
 def get_model_run(model_run):
     return model_run if model_run and model_run != 'None' else None
@@ -128,22 +124,71 @@ def print_model_machine_readable(model):
 
     print ';'.join(line)
 
-if args.command == 'status':
+
+#
+# Main program execution
+#
+
+def exec_hello(args):
+    reply = send_recv('hello')
+    for x in reply['data']:
+        print x
+    return reply['status']
+
+def exec_status(args):
+    reply = send_recv('status')
     for model in reply['data']:
         if not args.model or model['data_provider'] in args.model:
             print_model(model)
             print
+    return reply['status']
 
-elif args.command == 'check':
-
+def exec_check(args):
+    reply = send_recv('status')
     sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
     sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
     for model in reply['data']:
         if not args.model or model['data_provider'] in args.model:
             print_model_machine_readable(model)
+    return reply['status']
 
-else:
+def exec_load(args):
+    reply = send_recv('load %d' % args.model_run_id)
     for x in reply['data']:
         print x
+    return reply['status']
 
-sys.exit(reply['status'])
+def get_parser():
+    """
+    Instantiate the argument parser
+    """
+    parser = argparse.ArgumentParser()
+    sub = parser.add_subparsers(help='Try `syncerctl <sub-command> --help`')
+
+    # parser for the 'hello' command
+    hello = sub.add_parser('hello', help='Request "hello world"')
+    hello.set_defaults(func=exec_hello)
+
+    # parser for the 'status' command
+    status = sub.add_parser('status', help='Print model run status information')
+    status.add_argument('--full', action='store_true', help='Show all files belonging to data sets')
+    status.set_defaults(func=exec_status)
+
+    # parser for the 'check' command
+    check = sub.add_parser('check', help='Print machine-readable model run status information')
+    check.set_defaults(func=exec_check)
+
+    # common options for 'status' and 'check'
+    for class_ in [check, status]:
+        class_.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
+
+    # parser for the 'load' command
+    load = sub.add_parser('load', help='Ask Syncer to load and activate a specific model run')
+    load.add_argument('model_run_id', type=int)
+    load.set_defaults(func=exec_load)
+
+    return parser
+
+parser = get_parser()
+args = parser.parse_args()
+sys.exit(args.func(args))
