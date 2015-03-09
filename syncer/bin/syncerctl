@@ -153,7 +153,11 @@ def exec_check(args):
     return reply['status']
 
 def exec_load(args):
-    reply = send_recv({'command': 'load', 'model_run_id': args.model_run_id})
+    reply = send_recv({
+        'command': 'load',
+        'model_run_id': args.model_run_id,
+        'force': args.force
+    })
     for x in reply['data']:
         print x
     return reply['status']
@@ -184,7 +188,8 @@ def get_parser():
 
     # parser for the 'load' command
     load = sub.add_parser('load', help='Ask Syncer to load and activate a specific model run')
-    load.add_argument('model_run_id', type=int)
+    load.add_argument('model_run_id', type=int, help='Model run # from Modelstatus REST API service')
+    load.add_argument('--force', action='store_true', help='Ignore sanity checks')
     load.set_defaults(func=exec_load)
 
     return parser

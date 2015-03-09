@@ -338,6 +338,35 @@ class ModelTest(unittest.TestCase):
         model.set_wdb2ts_model_run(model_run)
         self.assertEqual(model_run, model.wdb2ts_model_run)
 
+    def test_set_must_update_wdb(self):
+        """
+        Test that forcing WDB loading works and that the option is reset when it is done.
+        """
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.set_available_model_run(model_run)
+        model.set_wdb_model_run(model_run)
+        self.assertEqual(model.has_pending_wdb_load(), False)
+        model.set_must_update_wdb(True)
+        self.assertEqual(model.has_pending_wdb_load(), True)
+        model.set_wdb_model_run(model_run)
+        self.assertEqual(model.has_pending_wdb_load(), False)
+
+    def test_set_must_update_wdb2ts(self):
+        """
+        Test that forcing WDB updates works and that the option is reset when it is done.
+        """
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model.set_available_model_run(model_run)
+        model.set_wdb_model_run(model_run)
+        model.set_wdb2ts_model_run(model_run)
+        self.assertEqual(model.has_pending_wdb2ts_update(), False)
+        model.set_must_update_wdb2ts(True)
+        self.assertEqual(model.has_pending_wdb2ts_update(), True)
+        model.set_wdb2ts_model_run(model_run)
+        self.assertEqual(model.has_pending_wdb2ts_update(), False)
+
     def test_set_invalid_data(self):
         """
         Test that the various set_ functions only accepts a ModelRun object.

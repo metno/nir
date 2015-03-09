@@ -209,12 +209,16 @@ class ZMQController(ZMQBase):
         """
         return self.make_reply(self.STATUS_OK, self.status['models'])
 
-    def run_load(self, model_run_id):
+    def run_load(self, model_run_id, force):
         """
         (Re)-load a model run into WDB.
         """
         model_run_id = int(model_run_id)
-        return self.exec_syncer({'command': 'load', 'model_run_id': model_run_id})
+        return self.exec_syncer({
+            'command': 'load',
+            'model_run_id': model_run_id,
+            'force': force,
+        })
 
     def exec_syncer(self, command):
         """
@@ -232,7 +236,7 @@ class ZMQController(ZMQBase):
             if tokens['command'] == 'status':
                 return self.run_status()
             if tokens['command'] == 'load':
-                return self.run_load(tokens['model_run_id'])
+                return self.run_load(tokens['model_run_id'], tokens['force'])
             raise Exception("Invalid command '%s'" % tokens['command'])
         except Exception, e:
             return self.make_reply(self.STATUS_INVALID, [unicode(e)])

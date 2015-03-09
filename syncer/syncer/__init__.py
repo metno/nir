@@ -91,6 +91,10 @@ class Model(syncer.utils.SerializeBase):
         self.wdb_updated = None
         self.wdb2ts_updated = None
 
+        # Overrides from --force
+        self.must_update_wdb = False
+        self.must_update_wdb2ts = False
+
         # Internal version increments of datasets
         self.model_run_version = {}
 
@@ -160,6 +164,7 @@ class Model(syncer.utils.SerializeBase):
         self._validate_model_run(model_run)
         self.wdb_model_run = model_run
         self.wdb_updated = syncer.utils.get_utc_now()
+        self.set_must_update_wdb(False)
         logging.info("Model %s has been loaded into WDB, model run: %s" % (self, self.wdb_model_run))
 
     def set_wdb2ts_model_run(self, model_run):
@@ -169,6 +174,7 @@ class Model(syncer.utils.SerializeBase):
         self._validate_model_run(model_run)
         self.wdb2ts_model_run = model_run
         self.wdb2ts_updated = syncer.utils.get_utc_now()
+        self.set_must_update_wdb2ts(False)
         logging.info("Model %s has been updated in WDB2TS, model run: %s" % (self, self.wdb2ts_model_run))
 
     def has_pending_wdb_load(self):
@@ -176,14 +182,26 @@ class Model(syncer.utils.SerializeBase):
         Returns True if the available model run has not been loaded into WDB yet.
         """
         if self.model_run_initialized():
-            return self.wdb_model_run != self.available_model_run
+            return self.must_update_wdb or (self.wdb_model_run != self.available_model_run)
         return False
 
     def has_pending_wdb2ts_update(self):
         """
         Returns True if the model run loaded into WDB has not been used to update WDB2TS yet.
         """
-        return self.wdb_model_run != self.wdb2ts_model_run
+        return self.must_update_wdb2ts or (self.wdb_model_run != self.wdb2ts_model_run)
+
+    def set_must_update_wdb(self, value):
+        """
+        Override internal state of WDB model run
+        """
+        self.must_update_wdb = value
+
+    def set_must_update_wdb2ts(self, value):
+        """
+        Override internal state of WDB2TS model run
+        """
+        self.must_update_wdb2ts = value
 
     def get_matching_data(self, dataset):
         """
@@ -307,7 +325,7 @@ class Daemon:
             if len(latest) == 0:
                 logging.info("REST API does not contain any recorded model runs.")
                 logging.warn("Syncer will not query for model runs again until restarted, or notified by publisher.")
-                self.set_available_model_run(model, None)
+                self.set_available_model_run(model, None, False)
 
             # More than one result, this is a server error and should not happen
             elif len(latest) > 1:
@@ -315,7 +333,7 @@ class Daemon:
 
             # Valid result
             else:
-                self.set_available_model_run(model, latest[0])
+                self.set_available_model_run(model, latest[0], False)
 
         # Server threw an error, recover from that
         except syncer.exceptions.RESTException, e:
@@ -336,21 +354,29 @@ class Daemon:
             logging.info("Nothing to do with this kind of event; no action taken.")
             return
 
-        self.load_model_run(id)
+        self.load_model_run(id, False)
 
-    def load_model_run(self, id):
+    def load_model_run(self, id, forced):
+        """
+        Download model run information from Modelstatus, and set it as an available model run
+        """
         try:
             model_run_object = self.model_run_collection.get_object(id)
         except syncer.exceptions.RESTException, e:
             logging.error("Server returned invalid resource: %s" % e)
-            return
+            return False
 
         for model in self.models:
             if model.data_provider == model_run_object.data_provider:
-                self.set_available_model_run(model, model_run_object)
-                return
+                self.set_available_model_run(model, model_run_object, forced)
+                if forced:
+                    logging.warning("Forcing WDB load and WDB2TS update for model run %d" % id)
+                    model.set_must_update_wdb(True)
+                    model.set_must_update_wdb2ts(True)
+                return True
 
-        logging.info("No models configured to handle this event; no action taken.")
+        logging.info("Syncer is not configured to load model '%s', no action taken")
+        return False
 
     def handle_zmq_command(self, tokens):
         """
@@ -361,12 +387,12 @@ class Daemon:
 
         if tokens['command'] == 'load':
             self.zmq_agent.send_command_response(self.zmq_agent.STATUS_OK, ['Model run %d scheduled for loading' % tokens['model_run_id']])
-            self.load_model_run(tokens['model_run_id'])
+            self.load_model_run(tokens['model_run_id'], tokens['force'])
             return
 
         self.zmq_agent.send_command_response(self.zmq_agent.STATUS_INVALID, ['command not recognized'])
 
-    def set_available_model_run(self, model, model_run):
+    def set_available_model_run(self, model, model_run, forced):
         """
         Check if a model run contains data sets, and set it as an available model run
         """
@@ -375,8 +401,11 @@ class Daemon:
                 logging.warn("Model run %s contains no data, discarding." % model_run.id)
                 return
             if not model.is_complete_dataset(model_run.data):
-                logging.warn("Model run %s is not complete, discarding." % model_run.id)
-                return
+                if forced:
+                    logging.warn("Model run %s is not complete, but I'm being forced, so loading it anyway." % model_run.id)
+                else:
+                    logging.warn("Model run %s is not complete, discarding." % model_run.id)
+                    return
 
             model.increment_model_run_version(model_run)
 
