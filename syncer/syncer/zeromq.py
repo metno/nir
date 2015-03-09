@@ -24,12 +24,12 @@ class ZMQBase(object):
 
 
 class ZMQEvent(ZMQBase):
+    required_fields = []
+
     def __init__(self, **kwargs):
         [setattr(self, key, value) for key, value in kwargs.iteritems()]
-        self.validate()
 
-    def validate(self):
-        for member in ['id', 'resource', 'version']:
+        for member in self.required_fields + ['version']:
             if not hasattr(self, member):
                 raise syncer.exceptions.ZMQEventIncomplete("ZMQEvent is missing the '%s' field" % member)
 
@@ -38,11 +38,35 @@ class ZMQEvent(ZMQBase):
             assert len(self.version) == 3
             self.version = [int(x) for x in self.version]
             assert self.version[0] == 1
-            assert self.version[1] >= 0
+            assert self.version[1] >= 1
             assert self.version[2] >= 0
         except:
             raise syncer.exceptions.ZMQEventUnsupportedVersion("ZMQEvent is of unsupported version: %s" % self.version)
 
+        self.validate()
+
+    def validate(self):
+        pass
+
+    @staticmethod
+    def factory(**kwargs):
+        if 'type' not in kwargs:
+            raise syncer.exceptions.ZMQEventIncomplete("ZMQEvent has undefined type!")
+        if kwargs['type'] == 'resource':
+            return ZMQResourceEvent(**kwargs)
+
+    def __repr__(self):
+        return "ZeroMQ event type=%s version=%s %s" % (
+            self.type,
+            '.'.join([str(x) for x in self.version]),
+            ' '.join(["%s=%s" % (key, getattr(self, key)) for key in self.required_fields])
+        )
+
+
+class ZMQResourceEvent(ZMQEvent):
+    required_fields = ['id', 'resource']
+
+    def validate(self):
         # validate id
         try:
             assert self.id == int(self.id)
@@ -55,9 +79,6 @@ class ZMQEvent(ZMQBase):
             assert len(self.resource) > 0
         except:
             raise syncer.exceptions.ZMQEventBadResource("ZMQEvent has bad resource: %s" % str(self.resource))
-
-    def __repr__(self):
-        return "ZeroMQ event version=%s resource=%s id=%d" % ('.'.join([str(x) for x in self.version]), self.resource, self.id)
 
 
 class ZMQSubscriber(ZMQBase):
@@ -89,7 +110,7 @@ class ZMQSubscriber(ZMQBase):
         """
         msg = self.recv()
         try:
-            event = ZMQEvent(**msg)
+            event = ZMQEvent.factory(**msg)
             return event
         except TypeError, e:
             logging.warning("Discarding spurious event from ZeroMQ publisher: %s" % unicode(msg))

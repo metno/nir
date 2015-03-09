@@ -29,7 +29,8 @@ class TestZmq(modelstatus.tests.test_utils.TestBase):
         object_ = self.orm.query(modelstatus.orm.ModelRun).get(1)
         zmq_msg = self.zmq.message_from_resource(object_)
         target_msg = {
-            'version': [1, 0, 0],
+            'version': [1, 1, 0],
+            'type': 'resource',
             'resource': 'model_run',
             'id': 1,
         }

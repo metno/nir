@@ -82,6 +82,8 @@ VALID_MODEL_FIXTURE = {
     'load_config': '/etc/netcdfload/arome.config'
 }
 
+ZEROMQ_PROTOCOL_VERSION = [1, 1, 0]
+
 
 class SerializeBaseTest(unittest.TestCase):
     def setUp(self):
@@ -406,66 +408,84 @@ class ZeroMQTest(unittest.TestCase):
 
     def test_zmqevent_ok(self):
         data = {
-            'version': [1, 0, 0],
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'type': 'resource',
             'resource': 'foo',
             'id': 123,
         }
-        event = syncer.zeromq.ZMQEvent(**data)
+        event = syncer.zeromq.ZMQEvent.factory(**data)
+        self.assertIsInstance(event, syncer.zeromq.ZMQResourceEvent)
         self.assertEqual(event.resource, 'foo')
+        self.assertEqual(event.type, 'resource')
         self.assertEqual(event.id, 123)
-        self.assertEqual(event.version, [1, 0, 0])
+        self.assertEqual(event.version, ZEROMQ_PROTOCOL_VERSION)
 
     def test_zmqevent_invalid_id(self):
         data = {
-            'version': [1, 0, 0],
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'type': 'resource',
             'resource': 'foo',
             'id': 'bar',
         }
         with self.assertRaises(syncer.exceptions.ZMQEventBadId):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_zmqevent_invalid_resource(self):
         data = {
-            'version': [1, 0, 0],
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'type': 'resource',
             'resource': '',
             'id': 9,
         }
         with self.assertRaises(syncer.exceptions.ZMQEventBadResource):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
+
+    def test_zmqevent_missing_type(self):
+        data = {
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'resource': 'foo',
+            'id': 23,
+        }
+        with self.assertRaises(syncer.exceptions.ZMQEventIncomplete):
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_zmqevent_missing_id(self):
         data = {
-            'version': [1, 0, 0],
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'type': 'resource',
             'resource': 'foo',
         }
         with self.assertRaises(syncer.exceptions.ZMQEventIncomplete):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_zmqevent_missing_resource(self):
         data = {
-            'version': [1, 0, 0],
+            'version': ZEROMQ_PROTOCOL_VERSION,
+            'type': 'resource',
             'id': 456,
         }
         with self.assertRaises(syncer.exceptions.ZMQEventIncomplete):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_zmqevent_unsupported_version(self):
         data = {
             'version': [2, 1, 3],
+            'type': 'resource',
             'resource': 'foo',
             'id': 456,
         }
         with self.assertRaises(syncer.exceptions.ZMQEventUnsupportedVersion):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_zmqevent_bad_version(self):
         data = {
             'version': 'bleeding edge',
+            'type': 'resource',
             'resource': 'foo',
             'id': 456,
         }
         with self.assertRaises(syncer.exceptions.ZMQEventUnsupportedVersion):
-            syncer.zeromq.ZMQEvent(**data)
+            syncer.zeromq.ZMQEvent.factory(**data)
 
     def test_command_non_existing(self):
         data = self.controller.exec_command({'command': 'foobarbaz'})

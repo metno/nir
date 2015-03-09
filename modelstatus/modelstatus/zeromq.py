@@ -15,7 +15,7 @@ import logging
 #
 # Follows Semantic Versioning 2.0.0: http://semver.org/spec/v2.0.0.html
 #
-MESSAGE_PROTOCOL_VERSION = [1, 0, 0]
+MESSAGE_PROTOCOL_VERSION = [1, 1, 0]
 
 
 class ZMQPublisher(object):
@@ -41,6 +41,7 @@ class ZMQPublisher(object):
     def message_from_resource(self, resource):
         return {
             'version': MESSAGE_PROTOCOL_VERSION,
+            'type': 'resource',
             'resource': unicode(resource.__table__),
             'id': resource.id,
         }
