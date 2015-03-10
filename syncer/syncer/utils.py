@@ -27,9 +27,28 @@ class SerializeBase:
                 serialized[key] = serialized[key].serialize()
         return serialized
 
+    def unserialize(self, data):
+        """
+        Load internal data structure from JSON decoded dictionary.
+        """
+        for key in self.__serializable__:
+            func_name = 'unserialize_' + key
+            func = getattr(self, func_name, None)
+            if callable(func):
+                value = func(data[key])
+            else:
+                value = data[key]
+            setattr(self, key, value)
+
     def _serialize_datetime(self, value):
         """
         Return a time zone-aware ISO 8601 string.
         """
         utc_time = value.astimezone(tz=dateutil.tz.tzutc())
         return utc_time.isoformat().replace(' ', 'T').replace('+00:00', 'Z')
+
+    def _unserialize_datetime(self, value):
+        """
+        Return a DateTime object from a ISO 8601 string.
+        """
+        return dateutil.parser.parse(value)

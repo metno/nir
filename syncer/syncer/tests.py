@@ -82,6 +82,42 @@ VALID_MODEL_FIXTURE = {
     'load_config': '/etc/netcdfload/arome.config'
 }
 
+
+VALID_STATE_HASH = {
+    "models": [
+        {
+            "_available_model_run_initialized": True,
+            "available_model_run": {
+                "created_date": "2015-03-09T14:29:03.689297Z",
+                "data": [
+                    {
+                        "format": "netcdf",
+                        "href": "opdata:///arome2_5/AROME_MetCoOp_12_fp.nc",
+                        "id": 4807,
+                        "model_run_id": 801
+                    }
+                ],
+                "data_provider": "arome_metcoop_2500m",
+                "id": 801,
+                "reference_time": "2015-03-09T12:00:00Z",
+                "version": 1
+            },
+            "available_updated": "2015-03-09T15:22:39.265798Z",
+            "data_provider": "arome_metcoop_2500m",
+            "model_run_age_critical": 60,
+            "model_run_age_warning": 30,
+            "model_run_version": {
+                "2015-03-09T12:00:00Z": 8
+            },
+            "wdb2ts_model_run": None,
+            "wdb2ts_updated": None,
+            "wdb_model_run": None,
+            "wdb_updated": None
+        }
+    ]
+}
+
+
 ZEROMQ_PROTOCOL_VERSION = [1, 1, 0]
 
 
@@ -247,14 +283,40 @@ class DaemonTest(unittest.TestCase):
         wdb2ts_services = [s.strip() for s in self.config.get('wdb2ts', 'services')]
         self.wdb2ts = syncer.wdb2ts.WDB2TS(self.config.get('wdb2ts', 'base_url'), wdb2ts_services)
 
-    def test_instance(self):
-        models = set()
+    def make_daemon(self):
+        models = set([syncer.Model(VALID_MODEL_FIXTURE)])
         model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
         data_collection = syncer.rest.DataCollection('http://localhost', True)
         zmq_subscriber = syncer.zeromq.ZMQSubscriber('ipc://null', 30, 30)
         zmq_agent = syncer.zeromq.ZMQAgent()
         tick = 300
-        syncer.Daemon(self.config, models, zmq_subscriber, zmq_agent, self.wdb, self.wdb2ts, model_run_collection, data_collection, tick)
+        state_file = '/dev/null'
+        return syncer.Daemon(self.config, models, zmq_subscriber, zmq_agent, self.wdb, self.wdb2ts, model_run_collection, data_collection, tick, state_file)
+
+    def test_instance(self):
+        self.make_daemon()
+
+    def test_read_state_file(self):
+        daemon = self.make_daemon()
+        state = daemon.read_state_file()
+        self.assertEqual(state, {})
+
+    def test_write_state_file(self):
+        daemon = self.make_daemon()
+        daemon.write_state_file({})
+
+    def test_load_state(self):
+        daemon = self.make_daemon()
+        daemon.load_state(VALID_STATE_HASH)
+        self.assertEqual(len(daemon.models), 1)
+        for model in daemon.models:
+            self.assertEqual(model.available_model_run.version, 1)
+            self.assertEqual(model.available_model_run.id, 801)
+            self.assertEqual(model.available_model_run.data[0].id, 4807)
+            self.assertEqual(model.wdb_updated, None)
+
+    def test_make_state(self):
+        pass
 
     def test_instance_model_type_error(self):
         models = ['invalid type']
@@ -302,6 +364,11 @@ class ModelTest(unittest.TestCase):
                 'available_updated', 'wdb_updated', 'wdb2ts_updated']:
             self.assertEqual(serialized[key], None)
             del serialized[key]
+
+        self.assertEqual(serialized['model_run_version'], {})
+        del serialized['model_run_version']
+        del serialized['_available_model_run_initialized']
+
         for key, value in serialized.iteritems():
             self.assertEqual(serialized[key], VALID_MODEL_FIXTURE[key])
 
@@ -384,9 +451,7 @@ class ModelTest(unittest.TestCase):
         model = self.get_model()
         model_run = self.get_model_run()
         key = model.get_model_run_key(model_run)
-        self.assertEqual(len(key), 2)
-        self.assertEqual(key[0], 'arome_metcoop_2500m')
-        self.assertEqual(key[1].strftime('%Y-%m-%dT%H:%M:%SZ'), VALID_MODEL_RUN_FIXTURE['reference_time'])
+        self.assertEqual(key, VALID_MODEL_RUN_FIXTURE['reference_time'])
 
     def test_get_model_run_version(self):
         model = self.get_model()

@@ -4,9 +4,11 @@ import traceback
 import multiprocessing
 import logging
 import logging.config
+import os
 import re
 import sys
 import zmq
+import json
 import argparse
 import ConfigParser
 
@@ -71,7 +73,9 @@ class Configuration:
 class Model(syncer.utils.SerializeBase):
     __serializable__ = ['data_provider', 'model_run_age_warning', 'model_run_age_critical',
                         'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
-                        'available_updated', 'wdb_updated', 'wdb2ts_updated']
+                        'available_updated', 'wdb_updated', 'wdb2ts_updated',
+                        'model_run_version', '_available_model_run_initialized',
+                        ]
 
     def __init__(self, data):
         [setattr(self, key, value) for key, value in data.iteritems()]
@@ -225,7 +229,7 @@ class Model(syncer.utils.SerializeBase):
         Return a compound key used for identifying a unique reference time and
         data provider combination used in a specific model run.
         """
-        return (model_run.data_provider, model_run.reference_time)
+        return model_run.serialize_reference_time(model_run.reference_time)
 
     def set_model_run_version(self, model_run, version):
         """
@@ -270,12 +274,33 @@ class Model(syncer.utils.SerializeBase):
     def serialize_wdb2ts_updated(self, value):
         return self._serialize_datetime(value) if value else None
 
+    def _unserialize_model_run(self, value):
+        return syncer.rest.ModelRun(value) if value else None
+
+    def unserialize_available_model_run(self, value):
+        return self._unserialize_model_run(value)
+
+    def unserialize_wdb_model_run(self, value):
+        return self._unserialize_model_run(value)
+
+    def unserialize_wdb2ts_model_run(self, value):
+        return self._unserialize_model_run(value)
+
+    def unserialize_available_updated(self, value):
+        return self._unserialize_datetime(value) if value else None
+
+    def unserialize_wdb_updated(self, value):
+        return self._unserialize_datetime(value) if value else None
+
+    def unserialize_wdb2ts_updated(self, value):
+        return self._unserialize_datetime(value) if value else None
+
     def __repr__(self):
         return self.data_provider
 
 
 class Daemon:
-    def __init__(self, config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick):
+    def __init__(self, config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick, state_file):
         self.config = config
         self.models = models
         self.zmq_subscriber = zmq_subscriber
@@ -285,6 +310,7 @@ class Daemon:
         self.model_run_collection = model_run_collection
         self.data_collection = data_collection
         self.tick = tick
+        self.state_file = state_file
 
         # Set up polling on the ZeroMQ sockets
         self.zmq_poller = zmq.Poller()
@@ -302,6 +328,71 @@ class Daemon:
         for num, model in enumerate(self.models):
             logging.info(" %2d of %2d: %s" % (num + 1, num_models, model.data_provider))
         logging.info("Main loop interval set to %d seconds.", self.tick)
+
+        state = self.read_state_file()
+        try:
+            self.load_state(state)
+        except Exception:
+            logging.critical("Either the state file is corrupt, or you encountered a bug. Cannot read this state file!")
+            raise
+
+    def read_state_file(self):
+        """
+        Read JSON state information from a file into a dictionary.
+        """
+        logging.info("Loading state information from %s" % self.state_file)
+        try:
+            with open(self.state_file, 'r') as f:
+                contents = f.read().strip()
+            if not contents:
+                return {}
+            return json.loads(contents)
+        except ValueError:
+            logging.critical("Syntax error in state file, expecting valid JSON")
+            raise
+        except IOError:
+            if os.path.isfile(self.state_file):
+                raise
+            logging.info("File does not exist, continuing with blank slate.")
+        return {}
+
+    def write_state_file(self, state):
+        """
+        Write JSON state information into a file.
+        """
+        logging.info("Writing state information to %s" % self.state_file)
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, sort_keys=True, indent=4)
+        except IOError, e:
+            logging.error("Error writing state file: %s" % unicode(e))
+
+    def load_state(self, state):
+        """
+        Load state from a dictionary.
+        """
+        if 'models' not in state:
+            return
+        for model in self.models:
+            for serialized in state['models']:
+                if serialized['data_provider'] == model.data_provider:
+                    model.unserialize(serialized)
+
+    def make_state(self):
+        """
+        Generate a dictionary with state data.
+        """
+        model_state = [model.serialize() for model in self.models]
+        return {
+            'models': model_state
+        }
+
+    def write_state(self):
+        """
+        Shortcut to make_state and write_state_file.
+        """
+        state = self.make_state()
+        return self.write_state_file(state)
 
     def sync_zmq_status(self):
         """
@@ -411,6 +502,7 @@ class Daemon:
 
         model.set_available_model_run(model_run)
         self.sync_zmq_status()
+        self.write_state()
 
     def load_model(self, model):
         """
@@ -423,6 +515,7 @@ class Daemon:
             self.wdb.cache_model_run(model.available_model_run)
             model.set_wdb_model_run(model.available_model_run)
             self.sync_zmq_status()
+            self.write_state()
 
         except syncer.exceptions.WDBLoadFailed, e:
             logging.error("WDB load failed: %s" % e)
@@ -441,6 +534,7 @@ class Daemon:
             self.wdb2ts.update_wdb2ts(model, model.wdb_model_run)
             model.set_wdb2ts_model_run(model.wdb_model_run)
             self.sync_zmq_status()
+            self.write_state()
 
         except syncer.exceptions.WDB2TSServerException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
@@ -511,6 +605,7 @@ class Daemon:
         logging.info("Daemon started.")
 
         self.sync_zmq_status()
+        self.write_state()
 
         try:
             while True:
@@ -570,6 +665,7 @@ def run(argv):
     base_url = config.get('webservice', 'url')
     verify_ssl = bool(int(config.get('webservice', 'verify_ssl')))
     tick = int(config.get('syncer', 'tick'))
+    state_file = config.get('syncer', 'state_file')
 
     # Instantiate REST API collection objects
     model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
@@ -593,7 +689,7 @@ def run(argv):
 
     # Start main application
     try:
-        daemon = Daemon(config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick)
+        daemon = Daemon(config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick, state_file)
         exit_code = daemon.run()
     except:
         zmq_ctl_proc.terminate()
