@@ -240,6 +240,13 @@ class Model(syncer.utils.SerializeBase):
 
     def get_model_run_version(self, model_run):
         """
+        Return the definite version of the specified model run; a combination
+        of authoritative version and internal version.
+        """
+        return model_run.version + self.get_internal_model_run_version(model_run)
+
+    def get_internal_model_run_version(self, model_run):
+        """
         Return the internal version of the specified model run.
         """
         key = self.get_model_run_key(model_run)
@@ -251,7 +258,7 @@ class Model(syncer.utils.SerializeBase):
         """
         Increment the internal model run version counter by one.
         """
-        self.set_model_run_version(model_run, self.get_model_run_version(model_run) + 1)
+        self.set_model_run_version(model_run, self.get_internal_model_run_version(model_run) + 1)
 
     def _serialize_model_run(self, value):
         return value.serialize() if self._valid_model_run(value) else None

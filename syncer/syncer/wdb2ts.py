@@ -105,7 +105,8 @@ class WDB2TS(object):
         """
         try:
             reference_time = model_run.serialize_reference_time(model_run.reference_time)  # wdb2ts is very picky about this
-            update_url = self.get_update_url(service, model.get_data_provider_or_group(), reference_time, model_run.version)
+            version = model.get_model_run_version(model_run)
+            update_url = self.get_update_url(service, model.get_data_provider_or_group(), reference_time, version)
         except TypeError, e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 

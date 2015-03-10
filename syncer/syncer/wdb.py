@@ -130,8 +130,7 @@ class WDB(object):
         else:
             cmd.extend(["--loadPlaceDefinition"])
 
-        # compose a special version to ensure that reloads always replace data
-        version = model_run.version + model.get_model_run_version(model_run)
+        version = model.get_model_run_version(model_run)
         cmd.extend(["--dataversion", unicode(version)])
 
         cmd.append(model_file)

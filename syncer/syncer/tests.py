@@ -457,13 +457,19 @@ class ModelTest(unittest.TestCase):
         model = self.get_model()
         model_run = self.get_model_run()
         version = model.get_model_run_version(model_run)
+        self.assertEqual(version, 1337)
+
+    def test_get_internal_model_run_version(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        version = model.get_internal_model_run_version(model_run)
         self.assertEqual(version, 0)
 
     def test_set_model_run_version(self):
         model = self.get_model()
         model_run = self.get_model_run()
-        ref_version = 1337
-        model.set_model_run_version(model_run, ref_version)
+        ref_version = 2674
+        model.set_model_run_version(model_run, 1337)
         version = model.get_model_run_version(model_run)
         self.assertEqual(version, ref_version)
 
@@ -472,7 +478,7 @@ class ModelTest(unittest.TestCase):
         model_run = self.get_model_run()
         model.increment_model_run_version(model_run)
         version = model.get_model_run_version(model_run)
-        self.assertEqual(version, 1)
+        self.assertEqual(version, 1338)
 
 
 class ModelRunTest(unittest.TestCase):
