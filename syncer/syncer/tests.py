@@ -109,10 +109,38 @@ VALID_STATE_HASH = {
             "model_run_version": {
                 "2015-03-09T12:00:00Z": 8
             },
-            "wdb2ts_model_run": None,
-            "wdb2ts_updated": None,
-            "wdb_model_run": None,
-            "wdb_updated": None
+            "wdb2ts_model_run": {
+                "created_date": "2015-03-09T14:29:03.689297Z",
+                "data": [
+                    {
+                        "format": "netcdf",
+                        "href": "opdata:///arome2_5/AROME_MetCoOp_12_fp.nc",
+                        "id": 4807,
+                        "model_run_id": 801
+                    }
+                ],
+                "data_provider": "arome_metcoop_2500m",
+                "id": 801,
+                "reference_time": "2015-03-09T12:00:00Z",
+                "version": 1
+            },
+            "wdb2ts_updated": "2015-03-09T15:29:39.265798Z",
+            "wdb_model_run": {
+                "created_date": "2015-03-09T14:29:03.689297Z",
+                "data": [
+                    {
+                        "format": "netcdf",
+                        "href": "opdata:///arome2_5/AROME_MetCoOp_12_fp.nc",
+                        "id": 4807,
+                        "model_run_id": 801
+                    }
+                ],
+                "data_provider": "arome_metcoop_2500m",
+                "id": 801,
+                "reference_time": "2015-03-09T12:00:00Z",
+                "version": 1
+            },
+            "wdb_updated": "2015-03-09T15:28:39.265798Z",
         }
     ]
 }
@@ -313,7 +341,12 @@ class DaemonTest(unittest.TestCase):
             self.assertEqual(model.available_model_run.version, 1)
             self.assertEqual(model.available_model_run.id, 801)
             self.assertEqual(model.available_model_run.data[0].id, 4807)
-            self.assertEqual(model.wdb_updated, None)
+            self.assertFalse(model.has_pending_wdb_load())
+            self.assertFalse(model.has_pending_wdb2ts_update())
+            model.set_wdb2ts_model_run(None)
+            self.assertTrue(model.has_pending_wdb2ts_update())
+            model.set_wdb_model_run(None)
+            self.assertTrue(model.has_pending_wdb_load())
 
     def test_make_state(self):
         pass

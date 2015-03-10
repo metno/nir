@@ -186,14 +186,26 @@ class Model(syncer.utils.SerializeBase):
         Returns True if the available model run has not been loaded into WDB yet.
         """
         if self.model_run_initialized():
-            return self.must_update_wdb or (self.wdb_model_run != self.available_model_run)
+            if self.available_model_run is None:
+                return False
+            if self.must_update_wdb:
+                return True
+            if self.wdb_model_run is None:
+                return True
+            return self.available_model_run.id != self.wdb_model_run.id
         return False
 
     def has_pending_wdb2ts_update(self):
         """
         Returns True if the model run loaded into WDB has not been used to update WDB2TS yet.
         """
-        return self.must_update_wdb2ts or (self.wdb_model_run != self.wdb2ts_model_run)
+        if self.wdb_model_run is None:
+            return False
+        if self.must_update_wdb2ts:
+            return True
+        if self.wdb2ts_model_run is None:
+            return True
+        return self.wdb_model_run.id != self.wdb2ts_model_run.id
 
     def set_must_update_wdb(self, value):
         """
