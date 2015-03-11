@@ -485,7 +485,7 @@ class Daemon:
                     model.set_must_update_wdb2ts(True)
                 return True
 
-        logging.info("Syncer is not configured to load model '%s', no action taken")
+        logging.info("Syncer is not configured to load model '%s', no action taken" % model_run_object.data_provider)
         return False
 
     def handle_zmq_command(self, tokens):
