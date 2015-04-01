@@ -128,9 +128,9 @@ class WDB2TS(object):
             response = self._get_request(update_url)
         except (syncer.exceptions.WDB2TSServiceUnavailableException,
                 syncer.exceptions.WDB2TSConnectionFailure), e:
-            raise syncer.exceptions.WDB2TSServerUpdateFailure("WDB2TS update %s failed because of some server error: %s" % (update_url, e))
+            raise syncer.exceptions.WDB2TSServerUpdateFailure("WDB2TS update failed because of some server error: %s" % e)
         except syncer.exceptions.WDB2TSServiceClientErrorException, e:
-            raise syncer.exceptions.WDB2TSClientUpdateFailure("WDB2TS update %s failed because the URL is not correct: %s" % (update_url, e))
+            raise syncer.exceptions.WDB2TSClientUpdateFailure("WDB2TS update failed because the URL is not correct: %s" % e)
         else:
             if 'NoNewDataRefTime' in response:
                 logging.info("WDB2TS already up to date: %s" % update_url)

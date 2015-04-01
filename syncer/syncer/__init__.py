@@ -555,7 +555,7 @@ class Daemon:
             self.sync_zmq_status()
             self.write_state()
 
-        except syncer.exceptions.WDB2TSServerException, e:
+        except syncer.exceptions.WDB2TSException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
 
     def main_loop_zmq(self):
