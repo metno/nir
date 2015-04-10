@@ -1,19 +1,30 @@
 # modelstatus.met.no
 
+## Setting up the environment
+
+You might want to use a Python Virtualenv before running the application or the tests:
+
+```
+virtualenv /path/to/virtualenv
+source /path/to/virtualenv/bin/activate
+```
+
+Then, to install all dependencies:
+
+```
+./setup.py develop
+```
+
 ## Start application
 
 ```
-export PYTHONPATH=../
-virtualenv virtualenv
-source virtualenv/bin/activate
-pip install -r requirements.txt
-python app.py --config=config.ini
+bin/modelstatus
 ```
 
 ## Run tests for application
 
 ```
-./run_tests.sh
+bin/run_tests
 ```
 
 ## modelstatus.met.no REST API
