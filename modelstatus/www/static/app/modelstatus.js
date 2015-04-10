@@ -35,4 +35,3 @@ modelstatusApp.controller('ModelRunCtrl', ['$scope', 'ModelRun', function($scope
     $scope.$watchCollection('filter', $scope.refresh);
 
 }]);
-"use strict";
