@@ -77,7 +77,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         Test that filtering by data_provider and reference_time, in addition to
         using order_by and limit, returns one result.
         """
-        query_string = "?data_provider=arome25&reference_time=1970-01-01T00:00:00Z&order_by=version:desc&limit=1"
+        query_string = "data_provider=arome25&reference_time=1970-01-01T00:00:00Z&order_by=version:desc&limit=1"
         body = self.simulate_request(self.url, method='GET', query_string=query_string)
         self.assertEqual(self.srmock.status, falcon.HTTP_200)
         body_content = self.decode_body(body)
@@ -109,7 +109,7 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         """
         Test that the limit parameter can not be negative.
         """
-        query_string = "?limit=-1"
+        query_string = "limit=-1"
         self.simulate_request(self.url, method='GET', query_string=query_string)
         self.assertEqual(self.srmock.status, falcon.HTTP_400)
 

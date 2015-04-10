@@ -12,7 +12,7 @@ setup(
         "SQLAlchemy==0.9.8",
         "argparse==1.2.1",
         "extras==0.0.3",
-        "falcon==0.1.10",
+        "falcon==0.2.0",
         "psycopg2==2.5.4",
         "python-dateutil==2.4.0",
         "python-mimeparse==0.1.4",

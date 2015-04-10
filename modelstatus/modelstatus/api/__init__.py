@@ -122,8 +122,16 @@ class BaseCollectionResource(BaseResource):
         except (ValueError, sqlalchemy.exc.InvalidRequestError), e:
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid query string', unicode(e))
 
+        try:
+            # Perform the actual query
+            dataset = [object_.serialize() for object_ in query_set]
+
+        except:
+            self.orm.rollback()
+            raise falcon.HTTPError(falcon.HTTP_500, 'Internal server error', 'Uncaught exception during SQL query')
+
         # Output to client
-        resp.body = [object_.serialize() for object_ in query_set]
+        resp.body = dataset
         resp.status = falcon.HTTP_200
 
     def parse_query_string(self, query_string):
@@ -211,6 +219,9 @@ class BaseItemResource(BaseResource):
             object_ = self.orm.query(self.orm_class).filter(self.orm_class.id == id).one()
         except sqlalchemy.orm.exc.NoResultFound:
             raise falcon.HTTPNotFound()
+        except:
+            self.orm.rollback()
+            raise falcon.HTTPError(falcon.HTTP_500, 'Internal server error', 'Uncaught exception during SQL query')
 
         resp.body = object_.serialize()
         resp.status = falcon.HTTP_200
