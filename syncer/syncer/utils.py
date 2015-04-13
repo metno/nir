@@ -9,7 +9,7 @@ def get_utc_now():
     return datetime.datetime.utcnow().replace(tzinfo=dateutil.tz.tzutc())
 
 
-class SerializeBase:
+class SerializeBase(object):
     __serializable__ = []
 
     def serialize(self):

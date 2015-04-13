@@ -28,7 +28,7 @@ EXIT_CONFIG = 1
 EXIT_LOGGING = 2
 
 
-class Configuration:
+class Configuration(object):
     def __init__(self, *args, **kwargs):
         self.config_parser = kwargs['config_parser'] if 'config_parser' in kwargs else self.create_config_parser()
         self.argument_parser = kwargs['argument_parser'] if 'argument_parser' in kwargs else self.create_argument_parser()
@@ -318,7 +318,7 @@ class Model(syncer.utils.SerializeBase):
         return self.data_provider
 
 
-class Daemon:
+class Daemon(object):
     def __init__(self, config, models, zmq_subscriber, zmq_agent, wdb, wdb2ts, model_run_collection, data_collection, tick, state_file):
         self.config = config
         self.models = models
