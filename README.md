@@ -1,9 +1,11 @@
 NIR
 ===
 
+## Abstract
+
 NIR is a model metadata web service and WDB data synchronization system.
 
-Currently in a volatile state, only usable for development and testing.
+Please see the README for [Syncer](syncer/README.md) and [Modelstatus](modelstatus/README.md).
 
 ## Development Environment
 
