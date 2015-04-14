@@ -7,6 +7,8 @@ import requests
 import json
 import logging
 import dateutil.parser
+import datetime
+import time
 
 import syncer
 import syncer.utils
@@ -52,6 +54,15 @@ class ModelRun(BaseResource):
         self.reference_time = dateutil.parser.parse(self.reference_time)
         self.created_date = dateutil.parser.parse(self.created_date)
         self.data = [Data(x) for x in self.data]
+
+    def age(self):
+        """
+        Return model run age, in seconds
+        """
+        now = datetime.datetime.now()
+        now_ts = time.mktime(now.timetuple())
+        then_ts = time.mktime(self.reference_time.timetuple())
+        return int(now_ts - then_ts)
 
     def serialize_reference_time(self, value):
         return self._serialize_datetime(value)

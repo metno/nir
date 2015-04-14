@@ -6,6 +6,7 @@ import ConfigParser
 import StringIO
 import datetime
 import dateutil
+import dateutil.relativedelta
 
 import syncer
 import syncer.wdb
@@ -513,6 +514,30 @@ class ModelTest(unittest.TestCase):
         version = model.get_model_run_version(model_run)
         self.assertEqual(version, 1338)
 
+    def test_monitoring_state_ok(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model_run.reference_time = datetime.datetime.now() - dateutil.relativedelta.relativedelta(minutes=25)
+        model.set_available_model_run(model_run)
+        state = model.get_monitoring_state()
+        self.assertEqual(state, syncer.MONITORING_OK)
+
+    def test_monitoring_state_warning(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model_run.reference_time = datetime.datetime.now() - dateutil.relativedelta.relativedelta(minutes=55)
+        model.set_available_model_run(model_run)
+        state = model.get_monitoring_state()
+        self.assertEqual(state, syncer.MONITORING_WARNING)
+
+    def test_monitoring_state_critical(self):
+        model = self.get_model()
+        model_run = self.get_model_run()
+        model_run.reference_time = datetime.datetime.now() - dateutil.relativedelta.relativedelta(minutes=85)
+        model.set_available_model_run(model_run)
+        state = model.get_monitoring_state()
+        self.assertEqual(state, syncer.MONITORING_CRITICAL)
+
 
 class ModelRunTest(unittest.TestCase):
     """Tests the syncer.rest.ModelRun resource"""
@@ -529,6 +554,12 @@ class ModelRunTest(unittest.TestCase):
         self.assertIsInstance(model_run.data_provider, str)
         self.assertIsInstance(model_run.reference_time, datetime.datetime)
         self.assertIsInstance(model_run.version, int)
+
+    def test_age(self):
+        model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
+        model_run.reference_time = datetime.datetime.now() - dateutil.relativedelta.relativedelta(minutes=7)
+        age = model_run.age()
+        self.assertEqual(age, 420)
 
 
 class ZeroMQTest(unittest.TestCase):

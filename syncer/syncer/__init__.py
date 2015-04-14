@@ -27,6 +27,10 @@ EXIT_SUCCESS = 0
 EXIT_CONFIG = 1
 EXIT_LOGGING = 2
 
+MONITORING_OK = 0
+MONITORING_WARNING = 1
+MONITORING_CRITICAL = 2
+
 
 class Configuration(object):
     def __init__(self, *args, **kwargs):
@@ -271,6 +275,19 @@ class Model(syncer.utils.SerializeBase):
         Increment the internal model run version counter by one.
         """
         self.set_model_run_version(model_run, self.get_internal_model_run_version(model_run) + 1)
+
+    def get_monitoring_state(self):
+        """
+        Return monitoring state: OK, WARNING or CRITICAL
+        """
+        if not self.model_run_initialized():
+            return MONITORING_OK
+        age = self.available_model_run.age() / 60
+        if age > self.model_run_age_critical:
+            return MONITORING_CRITICAL
+        if age > self.model_run_age_warning:
+            return MONITORING_WARNING
+        return MONITORING_OK
 
     def _serialize_model_run(self, value):
         return value.serialize() if self._valid_model_run(value) else None
@@ -558,6 +575,25 @@ class Daemon(object):
         except syncer.exceptions.WDB2TSException, e:
             logging.error("Failed to update WDB2TS: %s" % unicode(e))
 
+    def main_loop_poll(self):
+        """
+        If ZeroMQ events do not arrive, Syncer might not load a model.
+        This function will make sure that the REST API server is explicitly
+        checked for updated model data if Syncer is currently issuing a WARNING
+        or CRITICAL state for that model.
+        """
+        for model in self.models:
+            state = model.get_monitoring_state()
+            if state == MONITORING_WARNING:
+                state = 'WARNING'
+            elif state == MONITORING_CRITICAL:
+                state = 'CRITICAL'
+            else:
+                continue
+
+            logging.warning("Model %s is out of date (state %s). We might have missed a signal from ZeroMQ. Trying to fetch latest version from API..." % (model, state))
+            self.get_latest_model_run(model)
+
     def main_loop_zmq(self):
         """
         Check if we've got something from the Modelstatus ZeroMQ publisher or
@@ -628,6 +664,7 @@ class Daemon(object):
 
         try:
             while True:
+                self.main_loop_poll()
                 self.main_loop_inner()
                 self.main_loop_zmq()
 
