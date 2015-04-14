@@ -62,6 +62,11 @@ class BaseCollectionResource(BaseResource):
             logging.warning("Resource instantiation failed due to bad input data: %s" % unicode(e))
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid request', unicode(e))
 
+        except Exception, e:
+            self.orm.rollback()
+            logging.warning("HTTP POST failed due to failed database transaction: %s" % unicode(e))
+            raise falcon.HTTPError(falcon.HTTP_500, 'Internal server error', 'Uncaught exception during SQL query')
+
         # add the resource to the transaction manager
         self.orm.add(orm_resource)
 
@@ -72,12 +77,16 @@ class BaseCollectionResource(BaseResource):
 
         except sqlalchemy.exc.IntegrityError, e:
             self.orm.rollback()
-            logging.warning("Database transaction failed due to bad input data: %s" % unicode(e))
+            logging.error("HTTP POST failed due to failed database transaction: %s" % unicode(e))
             raise falcon.HTTPError(falcon.HTTP_400, 'Invalid data in request', unicode(e))
 
         # Here, we are guaranteed to have an object.
         # Fetch it from the database and return it as part of the request.
-        object_ = self.orm.query(self.orm_class).filter(self.orm_class.id == orm_resource.id).one()
+        try:
+            object_ = self.orm.query(self.orm_class).filter(self.orm_class.id == orm_resource.id).one()
+        except Exception, e:
+            logging.error("Error when fetching committed object from database: %s" % unicode(e))
+            raise falcon.HTTPError(falcon.HTTP_500, 'Internal server error', 'Uncaught exception during SQL query')
 
         # Publish a message through ZeroMQ publisher
         try:
@@ -128,6 +137,7 @@ class BaseCollectionResource(BaseResource):
 
         except:
             self.orm.rollback()
+            logging.error("Database transaction failed: %s" % unicode(e))
             raise falcon.HTTPError(falcon.HTTP_500, 'Internal server error', 'Uncaught exception during SQL query')
 
         # Output to client
