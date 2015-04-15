@@ -19,7 +19,8 @@ fi
 source "$venvpath/bin/activate"
 
 # Install dependencies
-`dirname $0`/setup.py install
+cd `dirname $0`
+./setup.py install
 
 # Unload virtualenv
 deactivate
