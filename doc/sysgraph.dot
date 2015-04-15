@@ -19,39 +19,38 @@ digraph {
     }
 
     subgraph cluster_ds {
-        label="Data store";
+        label="Modelstatus";
         fontcolor="#aabb44";
-        datastore   [label="Data store"];
+        api         [label="REST API"];
     }
 
     subgraph cluster_dbserver {
-        label="DB server";
+        label="WDB server";
         fontcolor="#aabb44";
         wdb         [label="WDB"];
-        loader      [label="Loader"];
-        rank = same; wdb; loader;
     }
 
     subgraph cluster_appserver {
-        label="App server";
+        label="WeatherAPI server";
         fontcolor="#aabb44";
-        weatherapi  [label="WeatherAPI"];
         wdb2ts      [label="WDB2TS"];
         syncer      [label="Syncer"];
-        syncer2     [label="Syncer 2..N"];
-        //rank = same; syncer; syncer2;
+        syncerctl   [label="syncerctl"];
+        rank=same; syncer syncerctl;
+    }
+
+    subgraph cluster_monitoring {
+        label="Monitoring server";
+        fontcolor="#aabb44";
+        checkmk     [label="Check_MK"];
     }
 
     sms_model       -> sms_load;
-    sms_load        -> datastore    [label="HTTP POST", fontcolor="#cc4444", fontsize="8"];
-    datastore       -> syncer       [label="ZMQ PUB", fontcolor="#4444cc", fontsize="8"];
-    syncer          -> datastore    [label="HTTP GET", fontcolor="#cc4444", fontsize="8"];
-    syncer          -> loader       [label="ZMQ REQ", fontcolor="#4444cc", fontsize="8"];
-    syncer          -> wdb2ts       [label="HTTP POST", fontcolor="#cc4444", fontsize="8"];
-    syncer          -> wdb          [label="SQL WCI", fontcolor="#44cc44", fontsize="8"];
-    loader          -> datastore    [label="HTTP GET", fontcolor="#cc4444", fontsize="8"];
-    loader          -> wdb          [label="netcdfLoad", fontcolor="#44cc44", fontsize="8"];
-    weatherapi      -> syncer       [label="ZMQ REQ", fontcolor="#4444cc", fontsize="8"];
-    syncer          -> syncer2      [label="ZMQ PUB", fontcolor="#4444cc", fontsize="8"];
-    syncer2         -> syncer       [label="ZMQ PUB", fontcolor="#4444cc", fontsize="8"];
+    sms_load        -> api          [label="HTTP POST",         fontcolor="#cc4444", fontsize="8"];
+    api             -> syncer       [label="ZMQ PUB",           fontcolor="#4444cc", fontsize="8"];
+    syncer          -> api          [label="HTTP GET",          fontcolor="#cc4444", fontsize="8"];
+    syncer          -> wdb          [label="SSH",               fontcolor="#44cc44", fontsize="8"];
+    syncer          -> wdb2ts       [label="HTTP GET",          fontcolor="#cc4444", fontsize="8"];
+    syncerctl       -> syncer       [label="ZMQ REQ",           fontcolor="#4444cc", fontsize="8"];
+    checkmk         -> syncerctl    [label="check_mk_agent",    fontcolor="#44cc44", fontsize="8"];
 }
