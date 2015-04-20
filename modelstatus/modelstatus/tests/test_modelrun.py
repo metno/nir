@@ -105,6 +105,19 @@ class TestModelRunCollectionResource(modelstatus.tests.test_utils.TestBase):
         body_content = self.decode_body(body)
         self.assertEqual(body_content[0]['id'], 1)
 
+    def test_multiple_order_by(self):
+        """
+        Test that multiple order_by pairs, separated by comma, returns a
+        correct result.
+        """
+        query_string = "order_by=data_provider:desc,version:desc"
+        body = self.simulate_request(self.url, method='GET', query_string=query_string)
+        self.assertEqual(self.srmock.status, falcon.HTTP_200)
+        body_content = self.decode_body(body)
+        self.assertEqual(len(body_content), 4)
+        self.assertEqual(body_content[0]['data_provider'], 'ecdet')
+        self.assertEqual(body_content[0]['version'], 2)
+
     def test_get_negative_limit(self):
         """
         Test that the limit parameter can not be negative.

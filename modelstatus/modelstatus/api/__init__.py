@@ -188,14 +188,17 @@ class BaseCollectionResource(BaseResource):
             raise ValueError("Limit must be a positive integer and non-zero")
         return value
 
-    def normalize_order_by(self, value):
+    def normalize_order_by(self, order_by):
         """
-        Convert a string serialized list of ordering parameters into a list of tuples.
+        Convert a list or string of ordering parameters into a list of tuples.
 
-        Example input:  version:desc,created_date:asc
-        Example output: [('version', 'desc'), ('created_date', 'asc')]
+        Example input  1: 'reference_time:asc'
+        Example output 1: [('reference_time', 'asc')]
+        Example input  2: ['version:desc', 'created_date:asc']
+        Example output 2: [('version', 'desc'), ('created_date', 'asc')]
         """
-        order_by = value.split(',')
+        if isinstance(order_by, basestring):
+            order_by = [order_by]
         order_list = []
         # work with 'field:direction' pairs
         for o in order_by:
