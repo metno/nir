@@ -4,6 +4,10 @@ import sys
 import zmq
 import json
 import argparse
+import datetime
+import dateutil.tz
+import dateutil.parser
+import dateutil.relativedelta
 
 ZMQ_SOCK = 'tcp://localhost:5050'
 
@@ -40,6 +44,32 @@ def send_recv(data):
 def get_model_run(model_run):
     return model_run if model_run and model_run != 'None' else None
 
+def is_model_ok(model):
+    """
+    Check if a model is in OK status.
+    Returns True if OK, False if not.
+    """
+    model_run = get_model_run(model['available_model_run'])
+    wdb_run = get_model_run(model['wdb_model_run'])
+    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
+
+    # check that all instances have seen data sets
+    if model_run == None or wdb_run == None or wdb2ts_run == None:
+        return False
+
+    # check that all instances have the same data set
+    if model_run['id'] != wdb_run['id'] or model_run['id'] != wdb2ts_run['id']:
+        return False
+
+    # check that reference time is within warning limit
+    reference_time = dateutil.parser.parse(model_run['reference_time'])
+    max_time = reference_time + dateutil.relativedelta.relativedelta(minutes=model['model_run_age_warning'])
+    now = datetime.datetime.now(dateutil.tz.tzutc())
+    if now > max_time:
+        return False
+
+    return True
+
 def print_model_run(model_run):
     print             "  id              %d" % model_run['id']
     print             "  reference_time  %s" % model_run['reference_time']
@@ -50,6 +80,12 @@ def print_model_run(model_run):
         print         "  file            %s" % model_run['data'][0]['href']
     else:
         print         "  num files       %d" % len(model_run['data'])
+
+def print_model_brief(model):
+    print "%(data_provider)-50s %(status)s" % {
+        'data_provider': model['data_provider'],
+        'status': 'OK' if is_model_ok(model) else 'NOT OK',
+    }
 
 def print_model(model):
     model_run = get_model_run(model['available_model_run'])
@@ -152,6 +188,13 @@ def exec_check(args):
             print_model_machine_readable(model)
     return reply['status']
 
+def exec_brief(args):
+    reply = send_recv({'command': 'status'})
+    for model in reply['data']:
+        if not args.model or model['data_provider'] in args.model:
+            print_model_brief(model)
+    return reply['status']
+
 def exec_load(args):
     reply = send_recv({
         'command': 'load',
@@ -182,8 +225,12 @@ def get_parser():
     check = sub.add_parser('check', help='Print machine-readable model run status information')
     check.set_defaults(func=exec_check)
 
-    # common options for 'status' and 'check'
-    for class_ in [check, status]:
+    # parser for the 'brief' command
+    brief = sub.add_parser('brief', help='Print a brief status indicating whether or not models are in an OK state')
+    brief.set_defaults(func=exec_brief)
+
+    # common options for status checks
+    for class_ in [check, status, brief]:
         class_.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
 
     # parser for the 'load' command
