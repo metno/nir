@@ -351,7 +351,7 @@ class Daemon(object):
         # Set up polling on the ZeroMQ sockets
         self.zmq_poller = zmq.Poller()
         self.zmq_poller.register(self.zmq_subscriber.sock, zmq.POLLIN)
-        self.zmq_poller.register(self.zmq_agent.rep, zmq.POLLIN)
+        self.zmq_poller.register(self.zmq_agent.sub, zmq.POLLIN)
 
         if not isinstance(models, set):
             raise TypeError("'models' must be a set of models")
@@ -513,11 +513,7 @@ class Daemon(object):
         logging.info("Executing remote command: %s" % tokens)
 
         if tokens['command'] == 'load':
-            self.zmq_agent.send_command_response(self.zmq_agent.STATUS_OK, ['Model run %d scheduled for loading' % tokens['model_run_id']])
             self.load_model_run(tokens['model_run_id'], tokens['force'])
-            return
-
-        self.zmq_agent.send_command_response(self.zmq_agent.STATUS_INVALID, ['command not recognized'])
 
     def set_available_model_run(self, model, model_run, forced):
         """
@@ -610,7 +606,7 @@ class Daemon(object):
             if zmq_event:
                 self.handle_zmq_event(zmq_event)
 
-        if self.zmq_agent.rep in events:
+        if self.zmq_agent.sub in events:
             zmq_command = self.zmq_agent.get_command()
             self.handle_zmq_command(zmq_command)
 

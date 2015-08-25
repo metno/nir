@@ -142,9 +142,9 @@ class ZMQAgent(ZMQBase):
         """
         Initialize a ZMQ IPC socket which receives commands from ZMQController.
         """
-        self.rep = self.context.socket(zmq.REP)
-        self.rep.setsockopt(zmq.SNDTIMEO, 2000)
-        self.rep.bind(addr)
+        self.sub = self.context.socket(zmq.SUB)
+        self.sub.setsockopt_string(zmq.SUBSCRIBE, u'')
+        self.sub.bind(addr)
 
     def sync_status(self, data):
         """
@@ -154,10 +154,7 @@ class ZMQAgent(ZMQBase):
         self.req.recv()
 
     def get_command(self):
-        return self.rep.recv_json()
-
-    def send_command_response(self, status, data):
-        return self.rep.send_json(self.make_reply(status, data))
+        return self.sub.recv_json()
 
 
 class ZMQController(ZMQBase):
@@ -167,7 +164,7 @@ class ZMQController(ZMQBase):
     def __init__(self, addr):
         self.context = zmq.Context()
         self.init_rep('tcp://127.0.0.1:59900')
-        self.init_req('tcp://127.0.0.1:59901')
+        self.init_pub('tcp://127.0.0.1:59901')
         self.init_sock(addr)
         self.poller = zmq.Poller()
         self.poller.register(self.sock, zmq.POLLIN)
@@ -176,12 +173,12 @@ class ZMQController(ZMQBase):
             'models': []
         }
 
-    def init_req(self, addr):
+    def init_pub(self, addr):
         """
         Initialize a ZMQ IPC socket which requests that commands are run on ZMQAgent.
         """
-        self.req = self.context.socket(zmq.REQ)
-        self.req.connect(addr)
+        self.pub = self.context.socket(zmq.PUB)
+        self.pub.connect(addr)
 
     def init_rep(self, addr):
         """
@@ -214,18 +211,19 @@ class ZMQController(ZMQBase):
         (Re)-load a model run into WDB.
         """
         model_run_id = int(model_run_id)
-        return self.exec_syncer({
+        self.queue_exec_syncer({
             'command': 'load',
             'model_run_id': model_run_id,
             'force': force,
         })
+        return self.make_reply(self.STATUS_OK, ['Request has been queued'])
 
-    def exec_syncer(self, command):
+    def queue_exec_syncer(self, command):
         """
-        Send a command to Syncer.
+        Queue a command to Syncer.
         """
-        self.req.send_json(command)
-        return self.req.recv_json()
+        logging.debug("Queueing command from Syncerctl: %s" % command)
+        self.pub.send_json(command)
 
     def exec_command(self, tokens):
         try:
