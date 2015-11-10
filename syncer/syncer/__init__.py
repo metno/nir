@@ -14,9 +14,10 @@ import ConfigParser
 
 import syncer.wdb
 import syncer.wdb2ts
-import syncer.rest
 import syncer.utils
 import syncer.zeromq
+
+import modelstatus
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
 DEFAULT_LOG_FILE_PATH = '/var/log/syncer.log'
@@ -74,7 +75,7 @@ class Configuration(object):
         return dict(self.config_parser.items(section_name))
 
 
-class Model(syncer.utils.SerializeBase):
+class Model(modelstatus.utils.SerializeBase):
     __serializable__ = ['data_provider', 'model_run_age_warning', 'model_run_age_critical',
                         'available_model_run', 'wdb_model_run', 'wdb2ts_model_run',
                         'available_updated', 'wdb_updated', 'wdb2ts_updated',
@@ -138,14 +139,14 @@ class Model(syncer.utils.SerializeBase):
         raise RuntimeError("A bug in the code enabled 'data_provider' to be a non-mandatory configuration option to Model.")
 
     def _valid_model_run(self, model_run):
-        return isinstance(model_run, syncer.rest.BaseResource)
+        return isinstance(model_run, modelstatus.BaseResource)
 
     def _validate_model_run(self, model_run):
         """
         Check that `model_run` is of the correct type.
         """
         if model_run is not None and not self._valid_model_run(model_run):
-            raise TypeError("%s argument 'model_run' must inherit from syncer.rest.BaseResource" % sys._getframe().f_code.co_name)
+            raise TypeError("%s argument 'model_run' must inherit from modelstatus.BaseResource" % sys._getframe().f_code.co_name)
 
     def set_available_model_run(self, model_run):
         """
@@ -311,7 +312,7 @@ class Model(syncer.utils.SerializeBase):
         return self._serialize_datetime(value) if value else None
 
     def _unserialize_model_run(self, value):
-        return syncer.rest.ModelRun(value) if value else None
+        return modelstatus.ModelRun(value) if value else None
 
     def unserialize_available_model_run(self, value):
         return self._unserialize_model_run(value)
@@ -720,8 +721,8 @@ def run(argv):
     state_file = config.get('syncer', 'state_file')
 
     # Instantiate REST API collection objects
-    model_run_collection = syncer.rest.ModelRunCollection(base_url, verify_ssl)
-    data_collection = syncer.rest.DataCollection(base_url, verify_ssl)
+    model_run_collection = modelstatus.ModelRunCollection(base_url, verify_ssl)
+    data_collection = modelstatus.DataCollection(base_url, verify_ssl)
 
     # Start the ZeroMQ modelstatus subscriber process
     zmq_subscriber_socket = config.get('zeromq', 'socket')

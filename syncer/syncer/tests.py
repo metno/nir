@@ -11,9 +11,10 @@ import dateutil.relativedelta
 import syncer
 import syncer.wdb
 import syncer.wdb2ts
-import syncer.rest
 import syncer.utils
 import syncer.exceptions
+
+import modelstatus
 
 config_file_contents = """
 [wdb2ts]
@@ -150,26 +151,6 @@ VALID_STATE_HASH = {
 ZEROMQ_PROTOCOL_VERSION = [1, 1, 0]
 
 
-class SerializeBaseTest(unittest.TestCase):
-    def setUp(self):
-        self.class_ = syncer.utils.SerializeBase()
-
-    def test_serialize_datetime_utc(self):
-        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.tzutc())
-        dt_string = self.class_._serialize_datetime(dt)
-        self.assertEqual(dt_string, '1970-01-01T01:01:01Z')
-
-    def test_serialize_datetime_cet(self):
-        dt = datetime.datetime.utcfromtimestamp(3661).replace(tzinfo=dateutil.tz.gettz('Europe/Oslo'))
-        dt_string = self.class_._serialize_datetime(dt)
-        self.assertEqual(dt_string, '1970-01-01T00:01:01Z')
-
-    def test_serialize_datetime_reject_naive(self):
-        dt = datetime.datetime.utcfromtimestamp(3661)
-        with self.assertRaises(ValueError):
-            self.class_._serialize_datetime(dt)
-
-
 class SyncerTest(unittest.TestCase):
     def setUp(self):
         self.config_file = StringIO.StringIO(config_file_contents)
@@ -244,7 +225,7 @@ class WDBTest(unittest.TestCase):
     def setUp(self):
         self.wdb = syncer.wdb.WDB('localhost', 'test')
         self.model = syncer.Model(VALID_MODEL_FIXTURE)
-        self.model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
+        self.model_run = modelstatus.ModelRun(VALID_MODEL_RUN_FIXTURE)
 
     def test_create_ssh_command(self):
         cmd = self.wdb.create_ssh_command(['ls'])
@@ -282,25 +263,6 @@ class WDBTest(unittest.TestCase):
         self.assertEqual(cmd, "ssh test@localhost psql -c \"SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['arome_metcoop_2500m'], NULL, 'exact 2015-01-19T16:04:40Z', NULL, NULL, NULL, array[-1]); ANALYZE;\"")
 
 
-class CollectionTest(unittest.TestCase):
-    BASE_URL = 'http://localhost'
-
-    def setUp(self):
-        self.store = syncer.rest.ModelRunCollection(self.BASE_URL, True)
-
-    def test_get_collection_url(self):
-        self.assertEqual(self.store.get_collection_url(), "%s/model_run" % self.BASE_URL)
-
-    def test_get_resource_url(self):
-        id = 48949832
-        self.assertEqual(self.store.get_resource_url(id), "%s/model_run/%d" % (self.BASE_URL, id))
-
-    def test_unserialize(self):
-        json_string = '{"foo":"bar"}'
-        json_data = {"foo": "bar"}
-        self.assertEqual(self.store.unserialize(json_string), json_data)
-
-
 class DaemonTest(unittest.TestCase):
 
     def setUp(self):
@@ -314,8 +276,8 @@ class DaemonTest(unittest.TestCase):
 
     def make_daemon(self):
         models = set([syncer.Model(VALID_MODEL_FIXTURE)])
-        model_run_collection = syncer.rest.ModelRunCollection('http://localhost', True)
-        data_collection = syncer.rest.DataCollection('http://localhost', True)
+        model_run_collection = modelstatus.ModelRunCollection('http://localhost', True)
+        data_collection = modelstatus.DataCollection('http://localhost', True)
         zmq_subscriber = syncer.zeromq.ZMQSubscriber('ipc://null', 30, 30)
         zmq_agent = syncer.zeromq.ZMQAgent()
         tick = 300
@@ -373,7 +335,7 @@ class ModelTest(unittest.TestCase):
         return syncer.Model(VALID_MODEL_FIXTURE)
 
     def get_model_run(self):
-        return syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
+        return modelstatus.ModelRun(VALID_MODEL_RUN_FIXTURE)
 
     def test_data_from_config_section(self):
         data = syncer.Model.data_from_config_section(self.config, 'model_foo')
@@ -537,29 +499,6 @@ class ModelTest(unittest.TestCase):
         model.set_available_model_run(model_run)
         state = model.get_monitoring_state()
         self.assertEqual(state, syncer.MONITORING_CRITICAL)
-
-
-class ModelRunTest(unittest.TestCase):
-    """Tests the syncer.rest.ModelRun resource"""
-
-    def test_initialize_with_invalid_reference_time(self):
-        invalid_fixture = copy.deepcopy(VALID_MODEL_RUN_FIXTURE)
-        invalid_fixture['reference_time'] = 'in a galaxy far, far away'
-        with self.assertRaises(ValueError):
-            syncer.rest.ModelRun(invalid_fixture)
-
-    def test_initialize_with_correct_data(self):
-        model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
-        self.assertIsInstance(model_run.id, int)
-        self.assertIsInstance(model_run.data_provider, str)
-        self.assertIsInstance(model_run.reference_time, datetime.datetime)
-        self.assertIsInstance(model_run.version, int)
-
-    def test_age(self):
-        model_run = syncer.rest.ModelRun(VALID_MODEL_RUN_FIXTURE)
-        model_run.reference_time = datetime.datetime.now() - dateutil.relativedelta.relativedelta(minutes=7)
-        age = model_run.age()
-        self.assertEqual(age, 420)
 
 
 class ZeroMQTest(unittest.TestCase):

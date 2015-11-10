@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.7
+#!/usr/bin/env python
 
 from setuptools import setup, find_packages
 
@@ -10,5 +10,6 @@ setup(
         "requests==2.5.0",
         "python-dateutil==2.4.0",
         "pyzmq==14.5.0",
+        "modelstatus-client==1.1.0",
     ],
 )
