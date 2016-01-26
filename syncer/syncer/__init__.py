@@ -280,7 +280,7 @@ class Model(syncer.utils.SerializeBase):
         """
         Return monitoring state: OK, WARNING or CRITICAL
         """
-        if not self.model_run_initialized():
+        if not self.model_run_initialized() or self.available_model_run is None:
             return MONITORING_OK
         age = self.available_model_run.age() / 60
         if age > self.model_run_age_critical:
