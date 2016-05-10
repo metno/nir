@@ -51,20 +51,20 @@ class Daemon(object):
     def run(self):
         '''Run the main event loop'''
         logging.debug('Awaiting events')
-        try:
-            while True:
-                try:
-                    # Collect any old events
-                    while self._listen_for_new_events():
-                        pass
-                    while True:
-                        self._process_pending_productinstances()
-                        self._listen_for_new_events()
-                except productstatus.exceptions.ServiceUnavailableException:
-                    logging.warn('productstatus service temporarily unavailable. Will retry later')
-                    time.sleep(1)
-        except KeyboardInterrupt:
-            logging.debug('Keyboard interrupt')
+        while True:
+            try:
+                # Collect any old events
+                while self._listen_for_new_events():
+                    pass
+                while True:
+                    self._process_pending_productinstances()
+                    self._listen_for_new_events()
+            except productstatus.exceptions.ServiceUnavailableException:
+                logging.warn('productstatus service temporarily unavailable. Will retry later')
+                time.sleep(1)
+            except KeyboardInterrupt:
+                logging.debug('Keyboard interrupt')
+                break
         logging.info('Exiting daemon loop')
 
     def _listen_for_new_events(self):
@@ -90,19 +90,29 @@ class Daemon(object):
         try:
             if event['resource'] == 'datainstance':
                 datainstance = self._get_datainstance(event)
-                reference_time = datainstance.data.productinstance.reference_time
-                syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(reference_time.timetuple())))
-                if datainstance:
-                    self._state_database.add_productinstance_to_be_processed(datainstance.data.productinstance)
+                if self._has_model_for(datainstance):
+                    reference_time = datainstance.data.productinstance.reference_time
+                    syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(reference_time.timetuple())))
+                    if datainstance:
+                        self._state_database.add_productinstance_to_be_processed(datainstance.data.productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
+            
+    def _has_model_for(self, datainstance):
+        for m in self.models:
+            if re.match(m.data_uri_pattern, datainstance.url):
+                return True
+        return False
 
     def _should_process_productinstance(self, productinstance):
         try:
-            servicebackend = self.api.servicebackend['datastore1']  # self._datainstance.servicebackend.resource_uri
-            dataformat = self.api.dataformat['netcdf']  # self._datainstance.format.resource_uri
-            complete = productinstance.complete[servicebackend.resource_uri][dataformat.resource_uri]
-            return complete['file_count']
+            for di in self.api.datainstance.objects.filter(data__productinstance=productinstance):
+                servicebackend = di.servicebackend
+                dataformat = di.format
+                complete = productinstance.complete[servicebackend.resource_uri][dataformat.resource_uri]
+                if complete['file_count']:
+                    return True
+            return False
         except AttributeError:
             logging.warning('Unable to find completeness information about data <%s>. Considering incomplete.' % (productinstance.resource_uri,))
             return False
@@ -141,12 +151,6 @@ class Daemon(object):
             time.sleep(sleep_time)
 
         return self.api.datainstance[event['id']]
-
-        datainstance = DataInstance(self.api.datainstance[event['id']], self.models)
-        if not datainstance.model:
-            logging.debug('No config found for model - ignoring')
-            return None
-        return datainstance
 
 
 class DataInstance(object):
