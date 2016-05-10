@@ -8,6 +8,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "lxml==3.6.0",
-        "productstatus-client==5.3.0"
+        "productstatus-client==5.3.0",
+        "statsd==3.2.1"
     ],
 )

@@ -8,6 +8,7 @@ import productstatus.api
 
 import syncer.exceptions
 import syncer.persistence
+import syncer.reporting
 from datetime import datetime
 
 
@@ -89,8 +90,9 @@ class Daemon(object):
         try:
             if event['resource'] == 'datainstance':
                 datainstance = self._get_datainstance(event)
+                reference_time = datainstance.data.productinstance.reference_time
+                syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(reference_time.timetuple())))
                 if datainstance:
-                    logging.info(str(datainstance.data.productinstance))
                     self._state_database.add_productinstance_to_be_processed(datainstance.data.productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
@@ -108,13 +110,22 @@ class Daemon(object):
     def _process_productinstance(self, productinstance):
         try:
             if self._should_process_productinstance(productinstance):
+                reporter = syncer.reporting.TimeReporter()
+                syncer.reporting.stats.incr('load start', 1)
                 for instance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
                     di = DataInstance(instance, self.models)
                     self.wdb.load_model_file(di)
+                reporter.report('wdb load')
                 self.wdb.cache_model_run(di)
+                reporter.report('wdb cache')
                 self.wdb2ts.update(di)
+                reporter.report('wdb2ts update')
                 self._state_database.set_loaded(productinstance.id)
+                reporter.report_total('productinstance time to complete')
+                syncer.reporting.stats.incr('load end', 1)
+                syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
         except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
+            syncer.reporting.stats.incr('load failed', 1)
             logging.error('Error when loading data: ' + unicode(e))
 
     def _get_datainstance(self, event):
