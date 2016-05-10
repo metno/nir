@@ -1,3 +1,5 @@
-/Syncer.egg-info/
-/build/
-/dist/
+deps
+Syncer.egg-info/
+.project
+.pydevproject
+*.pyc

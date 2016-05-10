@@ -56,6 +56,16 @@ class WDB2TS(object):
 
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
+    def update(self, datainstance):
+        try:
+            self.load_status()
+        except syncer.exceptions.WDB2TSMissingContentException, e:
+            logging.critical("Error in WDB2TS configuration: %s", unicode(e))
+        except syncer.exceptions.WDB2TSServerException, e:
+            logging.error("Can not fetch WDB2TS status information: %s", unicode(e))
+        else:
+            self.update_wdb2ts(datainstance)
+
     def load_status(self):
         """
         Set status dict for all defined services.
@@ -64,6 +74,8 @@ class WDB2TS(object):
             self.status[service] = {}
             status_xml = self.request_status(service)
             self.set_status_for_service(service, status_xml)
+
+        logging.debug('Status loaded: ' + str(self.status))
 
         return self.status
 
@@ -89,24 +101,22 @@ class WDB2TS(object):
 
         return [e.text for e in provider_elements]
 
-    def update_wdb2ts(self, model, model_run):
+    def update_wdb2ts(self, datainstance):
         """
         Update all relevant wdb2ts services for the specified model and model_run
         """
-        data_provider = model.get_data_provider_or_group()
+        data_provider = datainstance.data_provider()
 
         for service in self.status:
             if data_provider in self.status[service]['data_providers']:
-                self.update_wdb2ts_service(service, model, model_run)
+                self.update_wdb2ts_service(service, datainstance)
 
-    def update_wdb2ts_service(self, service, model, model_run):
+    def update_wdb2ts_service(self, service, datainstance):
         """
         Update a wdb2ts service for a given model and model_run
         """
         try:
-            reference_time = model_run.serialize_reference_time(model_run.reference_time)  # wdb2ts is very picky about this
-            version = model.get_model_run_version(model_run)
-            update_url = self.get_update_url(service, model.get_data_provider_or_group(), reference_time, version)
+            update_url = self.get_update_url(service, datainstance.data_provider(), datainstance.reference_time(), datainstance.version())
         except TypeError, e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 
@@ -116,7 +126,8 @@ class WDB2TS(object):
         """
         Generate update url for wdb2ts service.
         """
-        return "%s/%supdate?%s=%s,%d" % (self.base_url, service, data_provider, reference_time, version)
+        reftime_str = reference_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        return "%s/%supdate?%s=%s,%d" % (self.base_url, service, data_provider, reftime_str, version)
 
     def request_update(self, update_url):
         """

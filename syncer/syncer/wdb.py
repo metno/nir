@@ -48,31 +48,12 @@ class WDB(object):
         self.host = host
         self.user = user
 
-    def load_model_run(self, model, model_run):
-        """Load into wdb all relevant data from a model_run."""
-
-        loaded = 0
-        logging.info("Starting loading to WDB: %s" % model_run)
-
-        dataset = model.get_matching_data(model_run.data)
-
-        for data in dataset:
-            logging.info("Data URI '%s' matches regular expression '%s'" % (data.href, model.data_uri_pattern))
-            modelfile = WDB.convert_opdata_uri_to_file(data.href)
-            self.load_modelfile(model, model_run, modelfile)
-            loaded += 1
-
-        if loaded:
-            logging.info("Successfully finished loading %d files to WDB." % loaded)
-        else:
-            logging.warn("No files were loaded into WDB.")
-
-    def load_modelfile(self, model, model_run, modelfile):
+    def load_model_file(self, datainstance):
         """Load a modelfile into wdb."""
 
-        logging.info("Loading file %s" % modelfile)
+        logging.info("Loading file %s" % datainstance.url())
 
-        load_cmd = WDB.create_load_command(model, model_run, modelfile)
+        load_cmd = self.create_load_command(datainstance)
         cmd = self.create_ssh_command(load_cmd)
 
         try:
@@ -117,44 +98,43 @@ class WDB(object):
         return exit_code, stderr, stdout
 
     @staticmethod
-    def create_load_command(model, model_run, model_file):
-        """Generate a wdb load command for a specific model configuration and model run, based on info from config."""
-
-        cmd = [model.load_program, '--dataprovider', "'%s'" % model.data_provider]
-
-        if hasattr(model, 'load_config'):
-            cmd.extend(['-c', model.load_config])
-
-        if hasattr(model, 'place_name'):
-            cmd.extend(["--placename", model.place_name])
+    def clean_url(url):
+        # TODO: Handle opdata url
+        if url.startswith('file://'):
+            return url[len('file://'):]
+        elif re.match('opdata\:\/{3}(?!\/)', url):
+            return re.sub(r'^opdata\:\/\/\/', '/opdata/', url)
         else:
-            cmd.extend(["--loadPlaceDefinition"])
+            return url  # ...and hope for the best!
 
-        version = model.get_model_run_version(model_run)
-        cmd.extend(["--dataversion", unicode(version)])
+    @staticmethod
+    def create_load_command(datainstance):
+        load_command = [datainstance.model.load_program,
+                        '--loadPlaceDefinition',
+                        '--dataprovider', datainstance.data_provider()]
 
-        cmd.append(model_file)
+        if datainstance.version():
+            load_command.append('--dataversion')
+            load_command.append(unicode(datainstance.version()))
 
-        return cmd
+        if hasattr(datainstance.model, 'load_config'):
+            load_command.append('--configuration')
+            load_command.append(datainstance.model.load_config)
+
+        load_command.append(WDB.clean_url(datainstance.url()))
+        return load_command
+
+    def should_use_ssh(self):
+        return self.host not in ('localhost', '127.0.0.1')
 
     def create_ssh_command(self, cmd):
-        return ["ssh", "{0}@{1}".format(self.user, self.host)] + cmd
+        if self.should_use_ssh():
+            return ["ssh", "{0}@{1}".format(self.user, self.host)] + cmd
+        else:
+            return cmd
 
     @staticmethod
-    def convert_opdata_uri_to_file(data_uri):
-        """Convert an opdata uri to a file name with full path."""
-
-        # uri must start with opdata:/// ( and max 3 '/' )
-        if re.match('opdata\:\/{3}(?!\/)', data_uri) is None:
-            raise syncer.exceptions.OpdataURIException(
-                "The uri {0} is not correctly formatted".format(data_uri))
-
-        data_file_path = re.sub(r'^opdata\:\/\/\/', '/opdata/', data_uri)
-
-        return data_file_path
-
-    @staticmethod
-    def create_cache_query(model_run):
+    def create_cache_query(datainstance):
         """
         Generate a SQL/WCI query that caches a specific model run.
         """
@@ -163,41 +143,45 @@ class WDB(object):
         # Modelstatus would likely not contain information about such a model,
         # making it extremely unlikely that any malicious code could run here.
         return "SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
-            'data_provider': model_run.data_provider,
-            'reference_time': model_run.serialize_reference_time(model_run.reference_time),
+            'data_provider': datainstance.data_provider(),
+            'reference_time': datainstance.reference_time()
         }
 
     @staticmethod
     def create_analyze_query():
         return 'ANALYZE'
 
-    def create_cache_model_run_command(self, model_run):
+    def create_cache_model_run_command(self, datainstance):
         """
         Create an SSH command that runs cacheQuery and ANALYZE against the WDB
         server for the specified model run.
         """
-        cache_query = WDB.create_cache_query(model_run)
+        cache_query = WDB.create_cache_query(datainstance)
         analyze_query = WDB.create_analyze_query()
-        return self.create_ssh_command(['psql', '-c', "\"%s; %s;\"" % (cache_query, analyze_query)])
 
-    def cache_model_run(self, model_run):
+        sql_statement = cache_query + '; ' + analyze_query
+        if self.should_use_ssh():
+            # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
+            sql_statement = '"%s"' % (sql_statement,)
+        return self.create_ssh_command(['psql', 'wdb', '-U', 'wdb', '-c', sql_statement])
+
+    def cache_model_run(self, datainstance):
         """
         Run cacheQuery and ANALYZE against the WDB server for the specified model run.
         """
-        logging.info("Updating WDB cache for %s" % model_run)
+        logging.info("Updating WDB cache for %s" % datainstance.data_provider())
 
-        cmd = self.create_cache_model_run_command(model_run)
-        exit_code, stderr, stdout = WDB.execute_command(cmd)
+        cmd = self.create_cache_model_run_command(datainstance)
+        error_code, stderr, stdout = WDB.execute_command(cmd)
 
-        if exit_code == 0:
+        if error_code:
+            logging.error("Cache update failed with exit status %d" % error_code)
+
+            for output in stdout, stderr:
+                lines = self.get_std_lines(stdout)
+                if lines:
+                    [logging.debug(line) for line in lines]
+
+            raise syncer.exceptions.WDBCacheFailed("Cache update failed with exit status %d" % error_code)
+        else:
             logging.info("Cache updated successfully.")
-            return
-
-        logging.error("Cache update failed with exit status %d" % exit_code)
-
-        for output in stdout, stderr:
-            lines = self.get_std_lines(stdout)
-            if lines:
-                [logging.debug(line) for line in lines]
-
-        raise syncer.exceptions.WDBCacheFailed("Cache update failed with exit status %d" % exit_code)

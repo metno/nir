@@ -49,6 +49,3 @@ When WDB2TS needs updated information about a model run, Syncer will perform the
 2. Data providers for each service are matched against Syncer configuration.
 3. Iterate through applicable services, and send update request for each `service` and `data provider` combination.
 
-ZeroMQ subscription
--------------------
-Syncer subscribes to events from the Modelstatus service, and will trigger a model run update when it receives an event; see Mechanics of the Modelstatus query. The main loop will continue as usual after the update.
