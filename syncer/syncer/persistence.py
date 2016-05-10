@@ -57,7 +57,6 @@ class StateDatabase(object):
         c1.execute('select distinct product_id from pending_jobs')
         for r1 in c1:
             c2 = self._connection.cursor()
-            logging.info('r1[0] = ' + r1[0])
             c2.execute('select productinstance_id from pending_jobs where product_id=? order by reference_time desc, version desc', (r1[0],))
             for r2 in c2:
                 yield r2[0]
