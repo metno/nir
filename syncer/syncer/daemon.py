@@ -1,3 +1,4 @@
+import dateutil
 import logging
 import re
 import time
@@ -119,8 +120,9 @@ class Daemon(object):
     def _get_datainstance(self, event):
         # Ensure that all events are at least two seconds old
         timestamp = event['message_timestamp']
-        creation_time = datetime.strptime(timestamp, '%Y-%m-%dT%H:%M:%SZ')
-        event_age = (datetime.utcnow() - creation_time).total_seconds()
+        s = productstatus.utils.SerializeBase()
+        creation_time = s._unserialize_datetime(timestamp)
+        event_age = (datetime.now(tz=dateutil.tz.tzutc()) - creation_time).total_seconds()
         target_event_age = 2.5
         if event_age < target_event_age:
             sleep_time = target_event_age - event_age

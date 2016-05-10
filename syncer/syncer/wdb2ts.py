@@ -5,7 +5,7 @@ Functionality relating to WDB2TS.
 import lxml.etree
 import requests
 import logging
-
+import productstatus.utils
 import syncer.exceptions
 
 
@@ -126,7 +126,8 @@ class WDB2TS(object):
         """
         Generate update url for wdb2ts service.
         """
-        reftime_str = reference_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+        s = productstatus.utils.SerializeBase()
+        reftime_str = s._serialize_datetime(reference_time)
         return "%s/%supdate?%s=%s,%d" % (self.base_url, service, data_provider, reftime_str, version)
 
     def request_update(self, update_url):
