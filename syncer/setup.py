@@ -5,6 +5,7 @@ from setuptools import setup, find_packages
 setup(
     name="Syncer",
     version="0.1",
+    scripts=['bin/syncer', 'bin/syncerctl'],
     packages=find_packages(),
     install_requires=[
         "lxml==3.6.0",
