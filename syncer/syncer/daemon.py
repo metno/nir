@@ -100,7 +100,7 @@ class Daemon(object):
                         self._state_database.add_productinstance_to_be_processed(datainstance.data.productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
-            
+
     def _has_model_for(self, datainstance):
         for m in self.models:
             if re.match(m.data_uri_pattern, datainstance.url):

@@ -15,7 +15,7 @@ class StateDatabase(object):
         if not database_already_exists:
             self._initialize_database()
         self._update()
-            
+
     def _initialize_database(self):
         logging.debug('Creating new database file')
         with self._connection as c:
@@ -54,7 +54,7 @@ class StateDatabase(object):
                 c2.execute('select productinstance_id, force from pending_jobs where product_id=? order by reference_time desc, version desc', (r1[0],))
                 for r2 in c2:
                     yield r2
-                    
+
     def pending_productinstances(self):
         ret = {}
         c1 = self._connection.cursor()
@@ -63,7 +63,7 @@ class StateDatabase(object):
             c2 = self._connection.cursor()
             c2.execute('select productinstance_id, force from pending_jobs where product_id=? order by reference_time desc, version desc', (r1[0],))
             for pid, force in c2:
-                if not pid in ret:
+                if pid not in ret:
                     ret[pid] = force
                 elif force:
                     ret[ret[pid]] = True
