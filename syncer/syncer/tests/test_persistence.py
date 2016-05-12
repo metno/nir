@@ -48,7 +48,7 @@ class StateDatabaseTest(unittest.TestCase):
             pass
 
     def test_pending_productinstances_empty_on_start(self):
-        self.assertRaises(StopIteration, self.sb.pending_productinstances().next)
+        self.assertFalse(self.sb.pending_productinstances())
 
     def test_add_productinstance_to_be_processed(self):
         pi = ProductInstance(datetime.now(), 1)

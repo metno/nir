@@ -1,246 +1,54 @@
 #!/usr/bin/env python2.7
 
+import os
 import sys
-import zmq
-import json
 import argparse
-import datetime
-import dateutil.tz
-import dateutil.parser
-import dateutil.relativedelta
-
-ZMQ_SOCK = 'tcp://localhost:5050'
-
-def get_zeromq_sock():
-    """
-    Create ZeroMQ socket, connect to Syncer
-    """
-    context = zmq.Context()
-    sock = context.socket(zmq.REQ)
-    sock.setsockopt(zmq.RCVTIMEO, 500)
-    sock.setsockopt(zmq.SNDTIMEO, 500)
-    sock.setsockopt(zmq.LINGER, 0)
-    sock.connect(ZMQ_SOCK)
-    return sock
-
-def send_recv_zeromq(sock, data):
-    """
-    REQ/REP to ZeroMQ socket in Syncer
-    """
-    try:
-        sock.send_json(data)
-        return sock.recv_json()
-    except:
-        sys.stderr.write("Syncer isn't responding. Check that the program is running and listening on %s\n" % ZMQ_SOCK)
-        sys.exit(255)
-
-def send_recv(data):
-    """
-    Shortcut to the above functions
-    """
-    sock = get_zeromq_sock()
-    return send_recv_zeromq(sock, data)
-
-def get_model_run(model_run):
-    return model_run if model_run and model_run != 'None' else None
-
-def is_model_ok(model):
-    """
-    Check if a model is in OK status.
-    Returns True if OK, False if not.
-    """
-    model_run = get_model_run(model['available_model_run'])
-    wdb_run = get_model_run(model['wdb_model_run'])
-    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
-
-    # check that all instances have seen data sets
-    if model_run == None or wdb_run == None or wdb2ts_run == None:
-        return False
-
-    # check that all instances have the same data set
-    if model_run['id'] != wdb_run['id'] or model_run['id'] != wdb2ts_run['id']:
-        return False
-
-    # check that reference time is within warning limit
-    reference_time = dateutil.parser.parse(model_run['reference_time'])
-    max_time = reference_time + dateutil.relativedelta.relativedelta(minutes=model['model_run_age_warning'])
-    now = datetime.datetime.now(dateutil.tz.tzutc())
-    if now > max_time:
-        return False
-
-    return True
-
-def print_model_run(model_run):
-    print             "  id              %d" % model_run['id']
-    print             "  reference_time  %s" % model_run['reference_time']
-    if args.full:
-        for index, data in enumerate(model_run['data']):
-            print     "  file %3d        %s" % (index + 1, data['href'])
-    elif len(model_run['data']) == 1:
-        print         "  file            %s" % model_run['data'][0]['href']
-    else:
-        print         "  num files       %d" % len(model_run['data'])
-
-def print_model_brief(model):
-    print "%(data_provider)-50s %(status)s" % {
-        'data_provider': model['data_provider'],
-        'status': 'OK' if is_model_ok(model) else 'NOT OK',
-    }
-
-def print_model(model):
-    model_run = get_model_run(model['available_model_run'])
-    wdb_run = get_model_run(model['wdb_model_run'])
-    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
-
-    wdb_sync = False
-    wdb2ts_sync = False
-
-    print model['data_provider']
-    print '-' * len(model['data_provider'])
-
-    if model_run:
-        print         "Most recent model run according to Syncer:"
-        print_model_run(model_run)
-        print         "  updated         %s" % model['available_updated']
-        if wdb_run and wdb_run['id'] == model_run['id']:
-            print     "  wdb in sync     %s" % model['wdb_updated']
-            wdb_sync = True
-        else:
-            print     "  wdb             NOT synchronized"
-        if wdb2ts_run and wdb2ts_run['id'] == model_run['id']:
-            print     "  wdb2ts in sync  %s" % model['wdb2ts_updated']
-            wdb2ts_sync = True
-        else:
-            print     "  wdb2ts          NOT synchronized"
-    else:
-        print         "No model run data available"
-        return
-
-    if not wdb_sync:
-        print
-        if wdb_run:
-            print     "Model run in WDB:"
-            print_model_run(wdb_run)
-        else:
-            print     "Current Syncer instance has not loaded this model into WDB."
-
-    if not wdb2ts_sync:
-        if wdb_sync:
-            print
-        if wdb2ts_run:
-            print     "Model run in WDB2TS:"
-            print_model_run(wdb2ts_run)
-        else:
-            print     "Current Syncer instance has not updated this model in WDB2TS."
-
-def print_model_machine_readable(model):
-    model_run = get_model_run(model['available_model_run'])
-    wdb_run = get_model_run(model['wdb_model_run'])
-    wdb2ts_run = get_model_run(model['wdb2ts_model_run'])
-
-    line = [model['data_provider']]
-
-    for param in ['model_run_age_warning', 'model_run_age_critical']:
-        line += [str(model[param])] if model[param] else ['-']
-
-    if model_run:
-        line += [str(model_run['id']), model_run['reference_time'], model['available_updated']]
-    else:
-        line += ['-'] * 3
-
-    if wdb_run:
-        line += [str(wdb_run['id']), wdb_run['reference_time'], model['wdb_updated']]
-    else:
-        line += ['-'] * 3
-
-    if wdb2ts_run:
-        line += [str(wdb2ts_run['id']), wdb2ts_run['reference_time'], model['wdb2ts_updated']]
-    else:
-        line += ['-'] * 3
-
-    print ';'.join(line)
-
-
-#
-# Main program execution
-#
-
-def exec_hello(args):
-    reply = send_recv({'command': 'hello'})
-    for x in reply['data']:
-        print x
-    return reply['status']
-
-def exec_status(args):
-    reply = send_recv({'command': 'status'})
-    for model in reply['data']:
-        if not args.model or model['data_provider'] in args.model:
-            print_model(model)
-            print
-    return reply['status']
-
-def exec_check(args):
-    reply = send_recv({'command': 'status'})
-    sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
-    sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
-    for model in reply['data']:
-        if not args.model or model['data_provider'] in args.model:
-            print_model_machine_readable(model)
-    return reply['status']
-
-def exec_brief(args):
-    reply = send_recv({'command': 'status'})
-    for model in reply['data']:
-        if not args.model or model['data_provider'] in args.model:
-            print_model_brief(model)
-    return reply['status']
+import productstatus.api
+import productstatus.exceptions
+import ConfigParser
+import syncer.config
+import syncer.exceptions
+import syncer.persistence
 
 def exec_load(args):
-    reply = send_recv({
-        'command': 'load',
-        'model_run_id': args.model_run_id,
-        'force': args.force
-    })
-    for x in reply['data']:
-        print x
-    return reply['status']
+    try:
+        api = productstatus.api.Api(args.base_url, verify_ssl=args.verify_ssl)
+        pi = api.productinstance[args.product_instance_id]
+        print '%s = %s' % (args.product_instance_id, pi)
+        state_database = syncer.persistence.StateDatabase(args.database, create_if_missing=False)
+        state_database.add_productinstance_to_be_processed(pi, args.force)
+        print 'Queued for processing'
+        return syncer.config.EXIT_SUCCESS
+    except syncer.exceptions.MissingStateFile:
+        print 'Unable to find state file'
+        return syncer.config.EXIT_CONFIG
+    except productstatus.exceptions.ProductstatusException, e:
+        print 'Error when contacting productstatus service:', str(e)
+        return syncer.config.EXIT_CONNECT_PRODUCTSTATUS
+    
 
-def get_parser():
-    """
-    Instantiate the argument parser
-    """
+
+if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(help='Try `syncerctl <sub-command> --help`')
 
-    # parser for the 'hello' command
-    hello = sub.add_parser('hello', help='Request "hello world"')
-    hello.set_defaults(func=exec_hello)
-
-    # parser for the 'status' command
-    status = sub.add_parser('status', help='Print model run status information')
-    status.add_argument('--full', action='store_true', help='Show all files belonging to data sets')
-    status.set_defaults(func=exec_status)
-
-    # parser for the 'check' command
-    check = sub.add_parser('check', help='Print machine-readable model run status information')
-    check.set_defaults(func=exec_check)
-
-    # parser for the 'brief' command
-    brief = sub.add_parser('brief', help='Print a brief status indicating whether or not models are in an OK state')
-    brief.set_defaults(func=exec_brief)
-
-    # common options for status checks
-    for class_ in [check, status, brief]:
-        class_.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
-
     # parser for the 'load' command
-    load = sub.add_parser('load', help='Ask Syncer to load and activate a specific model run')
-    load.add_argument('model_run_id', type=int, help='Model run # from Modelstatus REST API service')
+    load = sub.add_parser('load', help='Ask Syncer to load and activate a specific product instance')
+    load.add_argument('product_instance_id', type=str, help='Product instance id from Productstatus REST API service')
     load.add_argument('--force', action='store_true', help='Ignore sanity checks')
+    load.add_argument('-c', '--config', type=str, help='Read productstatus config from the given file', default=syncer.config.DEFAULT_CONFIG_PATH)
     load.set_defaults(func=exec_load)
+    
+    args = parser.parse_args()
 
-    return parser
+    if not os.path.exists(args.config):
+        print 'Unable to find config file'
+        sys.exit(syncer.config.EXIT_CONFIG)
+    config_parser = ConfigParser.SafeConfigParser()
+    config_parser.read(args.config)
+    args.database = config_parser.get('syncer', 'state_database_file')
+    
+    args.base_url = config_parser.get('productstatus', 'url')
+    args.verify_ssl = bool(int(config_parser.get('productstatus', 'verify_ssl')))
 
-parser = get_parser()
-args = parser.parse_args()
-sys.exit(args.func(args))
+    sys.exit(args.func(args))

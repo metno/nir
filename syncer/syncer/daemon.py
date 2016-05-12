@@ -78,11 +78,14 @@ class Daemon(object):
             return None
 
     def _process_pending_productinstances(self):
-        for productinstance_id in self._state_database.pending_productinstances():
+        for productinstance_id, force in self._state_database.pending_productinstances().items():
             productinstance = self.api.productinstance[productinstance_id]
+            logging.debug('Pending productinstance %s. Force=%s' % (productinstance_id, force))
             if not self._state_database.is_loaded(productinstance_id):
-                if self._should_process_productinstance(productinstance):
-                    self._process_productinstance(productinstance)
+                logging.debug('Processing')
+                self._process_productinstance(productinstance, force)
+            else:
+                logging.debug('Already processed')
             self._state_database.done(productinstance)
 
     def _incoming_event(self, event):
@@ -112,14 +115,18 @@ class Daemon(object):
                 complete = productinstance.complete[servicebackend.resource_uri][dataformat.resource_uri]
                 if complete['file_count']:
                     return True
+            logging.info('Not yet ready for processing')
             return False
         except AttributeError:
             logging.warning('Unable to find completeness information about data <%s>. Considering incomplete.' % (productinstance.resource_uri,))
             return False
 
-    def _process_productinstance(self, productinstance):
+    def _process_productinstance(self, productinstance, force):
         try:
-            if self._should_process_productinstance(productinstance):
+            should_process = self._should_process_productinstance(productinstance)
+            if force or should_process:
+                if not should_process:
+                    logging.info('Data is not really ready for loading, but force=True. Attempting to load anyway')
                 reporter = syncer.reporting.TimeReporter()
                 syncer.reporting.stats.incr('load start', 1)
                 for instance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
