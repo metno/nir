@@ -101,3 +101,12 @@ class StateDatabaseTest(unittest.TestCase):
         self.assertFalse(instances[0].id in self.sb.pending_productinstances())
         self.assertFalse(instances[1].id in self.sb.pending_productinstances())
         self.assertTrue(instances[2].id in self.sb.pending_productinstances())
+
+    def test_select_latest_product_entry(self):
+        product = Product()
+        instances = [ProductInstance(datetime(2016, 5, 10, 6), 1, product.id),
+                     ProductInstance(datetime(2016, 5, 10, 7), 1, product.id)]
+        for i in instances:
+            self.sb.add_productinstance_to_be_processed(i)
+        self.assertFalse(instances[0].id in self.sb.pending_productinstances())
+        self.assertTrue(instances[1].id in self.sb.pending_productinstances())

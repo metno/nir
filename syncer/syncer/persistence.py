@@ -61,7 +61,7 @@ class StateDatabase(object):
         c1.execute('select distinct product_id from pending_jobs')
         for r1 in c1:
             c2 = self._connection.cursor()
-            c2.execute('select productinstance_id, force from pending_jobs where product_id=? order by reference_time desc, version desc', (r1[0],))
+            c2.execute('select productinstance_id, force from pending_jobs where product_id=? order by reference_time desc, version desc limit 1', (r1[0],))
             for pid, force in c2:
                 if pid not in ret:
                     ret[pid] = force

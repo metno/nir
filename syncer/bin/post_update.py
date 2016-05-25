@@ -50,6 +50,7 @@ class ProductStatusContentCreator(object):
         full_url = '%s/%s/%s/%s' % (self.host, self.base_path, what, self.credentials)
         data = json.dumps(data)
         request = urllib2.Request(full_url, data, {'Content-Type': 'application/json', 'Content-Length': len(data)})
+        print data
         response = urllib2.urlopen(request)
         return response.info()['location'].split('/')[-2]
 
@@ -68,8 +69,8 @@ def last_run():
 
 
 reference_time = last_run()
-model_file = 'http://thredds-staging.met.no/thredds/dodsC/metusers/christofferae/nowcasting/nowcastlcc.mos.pcappi-0-dbz.noclass-noclfilter-novpr-noclcorr-noblock.nordiclcc-1000.%s.nc' % (filename_format(reference_time),)
-version = 1
+model_file = 'http://thredds-staging.met.no/thredds/fileServer/metusers/christofferae/nowcasting/nowcastlcc.mos.pcappi-0-dbz.noclass-noclfilter-novpr-noclcorr-noblock.nordiclcc-1000.%s.nc' % (filename_format(reference_time),)
+version = 2
 api = productstatus.api.Api('http://localhost:8000')
 c = ProductStatusContentCreator(api, 'http://localhost:8000', 'foo', 'd54f9200b680ff11eb1ffcb01a99bde2abcdefab')
 # print c.nofity(model_file, reference_time, version).id

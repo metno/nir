@@ -44,9 +44,7 @@ class Daemon(object):
         logging.info('Connecting to %s, using client_id=%s and group_id=%s' % (base_url, client_id, group_id))
 
         self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
-        self.productstatus_listener = self.api.get_event_listener(client_id=client_id,
-                                                                  group_id=group_id,
-                                                                  consumer_timeout_ms=1000)
+        self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=1000)
 
     def run(self):
         '''Run the main event loop'''
@@ -54,8 +52,7 @@ class Daemon(object):
         while True:
             try:
                 # Collect any old events
-                while self._listen_for_new_events():
-                    pass
+                self._add_latest_events_from_server()
                 while True:
                     self._process_pending_productinstances()
                     self._listen_for_new_events()
@@ -77,6 +74,20 @@ class Daemon(object):
         except productstatus.exceptions.EventTimeoutException:
             return None
 
+    def _add_latest_events_from_server(self):
+        '''Find the latest events from server, and add them to the processing queue'''
+        products = [m.product for m in self.models]
+        for p in products:
+            product = self.api.product[p]
+            logging.info('Product: %s' % (product.slug))
+            productinstances = self.api.productinstance.objects
+            productinstances.filter(product=product)
+            productinstances.order_by('-reference_time')
+            productinstances.limit(2)  # two in case the latest is not yet complete
+            for idx in range(2):
+                pi = productinstances[idx]
+                self._state_database.add_productinstance_to_be_processed(pi)
+
     def _process_pending_productinstances(self):
         for productinstance_id, force in self._state_database.pending_productinstances().items():
             productinstance = self.api.productinstance[productinstance_id]
@@ -94,17 +105,20 @@ class Daemon(object):
             if event['resource'] == 'datainstance':
                 datainstance = self._get_datainstance(event)
                 if self._has_model_for(datainstance):
-                    reference_time = datainstance.data.productinstance.reference_time
-                    syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(reference_time.timetuple())))
-                    if datainstance:
-                        self._state_database.add_productinstance_to_be_processed(datainstance.data.productinstance)
+                    productinstance = datainstance.data.productinstance
+                    syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(productinstance.reference_time.timetuple())))
+                    self._state_database.add_productinstance_to_be_processed(productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
 
     def _has_model_for(self, datainstance):
-        for m in self.models:
-            if re.match(m.data_uri_pattern, datainstance.url):
-                return True
+        if datainstance:
+            for m in self.models:
+                product = datainstance.data.productinstance.product
+                model_match = m.product in (product.slug, product.id)
+                filename_match = re.match(m.data_uri_pattern, datainstance.url)
+                if model_match and filename_match:
+                    return True
         return False
 
     def _should_process_productinstance(self, productinstance):
