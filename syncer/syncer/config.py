@@ -1,7 +1,7 @@
 import argparse
 import logging
 import sys
-import ConfigParser
+import configparser
 
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
@@ -15,7 +15,7 @@ EXIT_CONNECT_PRODUCTSTATUS = 3
 class ModelConfig(object):
 
     def __init__(self, data):
-        [setattr(self, key, value) for key, value in data.iteritems()]
+        [setattr(self, key, value) for key, value in data.items()]
 
     @staticmethod
     def from_config_section(config, section_name):
@@ -27,7 +27,7 @@ class ModelConfig(object):
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
             if option not in section_keys:
-                raise ConfigParser.NoOptionError(option, section_name)
+                raise configparser.NoOptionError(option, section_name)
 
         data = config.section_options(section_name)
 
@@ -53,7 +53,7 @@ class Configuration(object):
     @staticmethod
     def create_config_parser():
         """Instantiate a configuration parser"""
-        return ConfigParser.SafeConfigParser()
+        return configparser.SafeConfigParser()
 
     @staticmethod
     def create_argument_parser():
@@ -87,9 +87,9 @@ def get_config(argv):
         config.parse_args(argv)
         config.load(open(config.args.config))
         return config
-    except IOError, e:
-        logging.critical("Could not read configuration file: %s" % unicode(e))
+    except IOError as e:
+        logging.critical("Could not read configuration file: %s" % str(e))
         sys.exit(EXIT_CONFIG)
-    except Exception, e:
-        logging.critical("Unhandled exception while loading configuration: %s" % unicode(e))
+    except Exception as e:
+        logging.critical("Unhandled exception while loading configuration: %s" % str(e))
         raise e

@@ -58,7 +58,7 @@ class WDB(object):
 
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
-        except TypeError, e:
+        except TypeError as e:
             raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
         if exit_code != EXIT_SUCCESS:
@@ -70,7 +70,7 @@ class WDB(object):
                 if lines:
                     logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
                     for line in lines:
-                        logging.warning("WDB load error: " + line)
+                        logging.warning("WDB load error: " + str(line))
 
                 raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
 
@@ -115,7 +115,7 @@ class WDB(object):
 
         if datainstance.version():
             load_command.append('--dataversion')
-            load_command.append(unicode(datainstance.version()))
+            load_command.append(str(datainstance.version()))
 
         if hasattr(datainstance.model, 'load_config'):
             load_command.append('--configuration')
@@ -180,7 +180,7 @@ class WDB(object):
             for output in stdout, stderr:
                 lines = self.get_std_lines(stdout)
                 if lines:
-                    [logging.debug(line) for line in lines]
+                    [logging.debug(str(line)) for line in lines]
 
             raise syncer.exceptions.WDBCacheFailed("Cache update failed with exit status %d" % error_code)
         else:

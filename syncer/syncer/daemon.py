@@ -2,7 +2,7 @@ import dateutil
 import logging
 import re
 import time
-import ConfigParser
+import configparser
 import productstatus.exceptions
 import productstatus.api
 
@@ -38,7 +38,7 @@ class Daemon(object):
             # Get all wdb2ts services from comma separated list in config
             wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
             self.wdb2ts = syncer.wdb2ts.WDB2TS(config.get('wdb2ts', 'base_url'), wdb2ts_services)
-        except ConfigParser.Error, e:
+        except configparser.Error as e:
             raise syncer.exceptions.ConfigurationException(e)
 
         logging.info('Connecting to %s, using client_id=%s and group_id=%s' % (base_url, client_id, group_id))
@@ -89,7 +89,7 @@ class Daemon(object):
                 self._state_database.add_productinstance_to_be_processed(pi)
 
     def _process_pending_productinstances(self):
-        for productinstance_id, force in self._state_database.pending_productinstances().items():
+        for productinstance_id, force in list(self._state_database.pending_productinstances().items()):
             productinstance = self.api.productinstance[productinstance_id]
             logging.debug('Pending productinstance %s. Force=%s' % (productinstance_id, force))
             if not self._state_database.is_loaded(productinstance_id):
@@ -157,7 +157,7 @@ class Daemon(object):
                 syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
         except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
             syncer.reporting.stats.incr('load failed', 1)
-            logging.error('Error when loading data: ' + unicode(e))
+            logging.error('Error when loading data: ' + str(e))
 
     def _get_datainstance(self, event):
         # Ensure that all events are at least two seconds old

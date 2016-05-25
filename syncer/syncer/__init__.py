@@ -3,7 +3,7 @@ import logging.config
 import os
 import sys
 import traceback
-import ConfigParser
+import configparser
 
 import syncer.config
 import syncer.exceptions
@@ -21,7 +21,7 @@ def run(config):
     try:
         daemon = syncer.daemon.Daemon(config)
         daemon.run()
-    except syncer.exceptions.ConfigurationException, e:
+    except syncer.exceptions.ConfigurationException as e:
         logging.critical(str(e))
         return syncer.config.EXIT_CONFIG
     return syncer.config.EXIT_SUCCESS
@@ -37,11 +37,11 @@ def main(argv):
     # Set up proper logging
     try:
         logging.config.fileConfig(config.args.config, disable_existing_loggers=True)
-    except ConfigParser.Error, e:
-        logging.critical("There is an error in the logging configuration: %s" % unicode(e))
+    except configparser.Error as e:
+        logging.critical("There is an error in the logging configuration: %s" % str(e))
         return syncer.config.EXIT_LOGGING
-    except IOError, e:
-        logging.critical("Could not read logging configuration file: %s" % unicode(e))
+    except IOError as e:
+        logging.critical("Could not read logging configuration file: %s" % str(e))
         return syncer.config.EXIT_LOGGING
 
     try:

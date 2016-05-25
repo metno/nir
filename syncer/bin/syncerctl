@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
 import argparse
 import productstatus.api
 import productstatus.exceptions
-import ConfigParser
+import configparser
 import syncer.config
 import syncer.exceptions
 import syncer.persistence
@@ -14,16 +14,16 @@ def exec_load(args):
     try:
         api = productstatus.api.Api(args.base_url, verify_ssl=args.verify_ssl)
         pi = api.productinstance[args.product_instance_id]
-        print '%s = %s' % (args.product_instance_id, pi)
+        print('%s = %s' % (args.product_instance_id, pi))
         state_database = syncer.persistence.StateDatabase(args.database, create_if_missing=False)
         state_database.add_productinstance_to_be_processed(pi, args.force)
-        print 'Queued for processing'
+        print('Queued for processing')
         return syncer.config.EXIT_SUCCESS
     except syncer.exceptions.MissingStateFile:
-        print 'Unable to find state file'
+        print('Unable to find state file')
         return syncer.config.EXIT_CONFIG
-    except productstatus.exceptions.ProductstatusException, e:
-        print 'Error when contacting productstatus service:', str(e)
+    except productstatus.exceptions.ProductstatusException as e:
+        print('Error when contacting productstatus service:', str(e))
         return syncer.config.EXIT_CONNECT_PRODUCTSTATUS
     
 
@@ -42,9 +42,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not os.path.exists(args.config):
-        print 'Unable to find config file'
+        print('Unable to find config file')
         sys.exit(syncer.config.EXIT_CONFIG)
-    config_parser = ConfigParser.SafeConfigParser()
+    config_parser = configparser.SafeConfigParser()
     config_parser.read(args.config)
     args.database = config_parser.get('syncer', 'state_database_file')
     

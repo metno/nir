@@ -28,7 +28,7 @@ class WDB2TS(object):
         # Validate xml
         try:
             tree = lxml.etree.fromstring(status_xml)
-        except lxml.etree.XMLSyntaxError, e:
+        except lxml.etree.XMLSyntaxError as e:
             raise syncer.exceptions.WDB2TSMissingContentException("Could not parse XML content from request %s: %s."
                                                                   % (status_url, e))
         else:
@@ -44,8 +44,8 @@ class WDB2TS(object):
         """
         try:
             response = self.session.get(url)
-        except requests.ConnectionError, e:
-            raise syncer.exceptions.WDB2TSConnectionFailure("Connection to WDB2TS failed: %s" % unicode(e))
+        except requests.ConnectionError as e:
+            raise syncer.exceptions.WDB2TSConnectionFailure("Connection to WDB2TS failed: %s" % str(e))
 
         if response.status_code >= 500:
             exc = syncer.exceptions.WDB2TSServiceUnavailableException
@@ -57,12 +57,13 @@ class WDB2TS(object):
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
     def update(self, datainstance):
+        return
         try:
             self.load_status()
-        except syncer.exceptions.WDB2TSMissingContentException, e:
-            logging.critical("Error in WDB2TS configuration: %s", unicode(e))
-        except syncer.exceptions.WDB2TSServerException, e:
-            logging.error("Can not fetch WDB2TS status information: %s", unicode(e))
+        except syncer.exceptions.WDB2TSMissingContentException as e:
+            logging.critical("Error in WDB2TS configuration: %s", str(e))
+        except syncer.exceptions.WDB2TSServerException as e:
+            logging.error("Can not fetch WDB2TS status information: %s", str(e))
         else:
             self.update_wdb2ts(datainstance)
 
@@ -70,7 +71,7 @@ class WDB2TS(object):
         """
         Set status dict for all defined services.
         """
-        for service in self.status.keys():
+        for service in list(self.status.keys()):
             self.status[service] = {}
             status_xml = self.request_status(service)
             self.set_status_for_service(service, status_xml)
@@ -117,7 +118,7 @@ class WDB2TS(object):
         """
         try:
             update_url = self.get_update_url(service, datainstance.data_provider(), datainstance.reference_time(), datainstance.version())
-        except TypeError, e:
+        except TypeError as e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 
         self.request_update(update_url)
@@ -139,9 +140,9 @@ class WDB2TS(object):
         try:
             response = self._get_request(update_url)
         except (syncer.exceptions.WDB2TSServiceUnavailableException,
-                syncer.exceptions.WDB2TSConnectionFailure), e:
+                syncer.exceptions.WDB2TSConnectionFailure) as e:
             raise syncer.exceptions.WDB2TSServerUpdateFailure("WDB2TS update failed because of some server error: %s" % e)
-        except syncer.exceptions.WDB2TSServiceClientErrorException, e:
+        except syncer.exceptions.WDB2TSServiceClientErrorException as e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("WDB2TS update failed because the URL is not correct: %s" % e)
         else:
             if 'NoNewDataRefTime' in response:
@@ -152,4 +153,4 @@ class WDB2TS(object):
                 logging.info("Unknown response from WDB2TS on request %s: %s" % (update_url, response))
 
     def __repr__(self):
-        return "WDB2TS(%s, %s)" % (self.base_url, ",".join(self.status.keys()))
+        return "WDB2TS(%s, %s)" % (self.base_url, ",".join(list(self.status.keys())))
