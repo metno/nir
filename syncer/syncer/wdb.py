@@ -55,7 +55,7 @@ class WDB(object):
 
         load_cmd = self.create_load_command(datainstance)
         cmd = self.create_ssh_command(load_cmd)
-
+        
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
         except TypeError as e:
@@ -151,6 +151,16 @@ class WDB(object):
     def create_analyze_query():
         return 'ANALYZE'
 
+    def _create_psql_command(self, sql_statement, additional_psql_arguments = []):
+        """
+        Create an SSH command that runs the given sql query against the WDB
+        server.
+        """
+        if self.should_use_ssh():
+            # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
+            sql_statement = '"%s"' % (sql_statement,)
+        return self.create_ssh_command(['psql', 'wdb', '-U', 'wdb'] + additional_psql_arguments + ['-c', sql_statement])
+
     def create_cache_model_run_command(self, datainstance):
         """
         Create an SSH command that runs cacheQuery and ANALYZE against the WDB
@@ -160,17 +170,15 @@ class WDB(object):
         analyze_query = WDB.create_analyze_query()
 
         sql_statement = cache_query + '; ' + analyze_query
-        if self.should_use_ssh():
-            # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
-            sql_statement = '"%s"' % (sql_statement,)
-        return self.create_ssh_command(['psql', 'wdb', '-U', 'wdb', '-c', sql_statement])
+        
+        return self._create_psql_command(sql_statement)
 
     def cache_model_run(self, datainstance):
         """
         Run cacheQuery and ANALYZE against the WDB server for the specified model run.
         """
         logging.info("Updating WDB cache for %s" % datainstance.data_provider())
-
+        
         cmd = self.create_cache_model_run_command(datainstance)
         error_code, stderr, stdout = WDB.execute_command(cmd)
 
@@ -185,3 +193,12 @@ class WDB(object):
             raise syncer.exceptions.WDBCacheFailed("Cache update failed with exit status %d" % error_code)
         else:
             logging.info("Cache updated successfully.")
+
+    def get_status(self, data_provider):
+        query = "select wci.begin('wdb'); select referencetime, storetime from wci.read(NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL::wci.returngid) order by referencetime desc, storetime desc limit 1"
+        cmd = self._create_psql_command(query, ['-t'])
+        error_code, stderr, stdout = WDB.execute_command(cmd)
+        if error_code:
+            raise WDBAccessException('Unable to read wdb database')
+        ret = [s.strip() for s in stdout.decode().split('|')]
+        return ret

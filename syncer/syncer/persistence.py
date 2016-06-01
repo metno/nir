@@ -34,6 +34,13 @@ class StateDatabase(object):
                 c.execute('create table loaded_data (productinstance text primary key, load_time timestamp not null default current_timestamp)')
                 c.execute('create table pending_jobs (product_id text, reference_time timestamp not null, version int not null, productinstance_id text not null, force boolean not null default false)')
                 c.execute('insert into version (version) values (1)')
+#         if version < 2:
+#             with self._connection as c:
+#                 c.execute('alter table pending_jobs rename to pending_jobs_old')
+#                 c.execute('create table pending_jobs (product_id text, reference_time timestamp not null, version int not null, productinstance_id text not null, force boolean not null default false, pending_since timestamp not null default current_timestamp)')
+#                 c.execute('insert into pending_jobs (select product_id, reference_time, version, productinstance_id, force from pending_jobs_old)')
+#                 c.execute('drop table pending_jobs_old')
+#                 c.execute('insert into version (version) values (2)')
 
     def is_loaded(self, productinstance_id):
         c = self._connection.execute('select load_time from loaded_data where productinstance=?', (productinstance_id,))
@@ -44,16 +51,13 @@ class StateDatabase(object):
             c.execute('insert into loaded_data (productinstance) values (?)', (productinstance_id,))
             # at the same time, make sure database only contains relatively new data
             c.execute("delete from loaded_data where load_time<datetime('now', '-1 day')")
-
-    def pending_productinstances2(self):
-        with self._connection:
-            c1 = self._connection.cursor()
-            c1.execute('select distinct product_id from pending_jobs')
-            for r1 in c1:
-                c2 = self._connection.cursor()
-                c2.execute('select productinstance_id, force from pending_jobs where product_id=? order by reference_time desc, version desc', (r1[0],))
-                for r2 in c2:
-                    yield r2
+            
+    def get_load_time(self, productinstance_id):
+        c = self._connection.execute('select load_time from loaded_data where productinstance=?', (productinstance_id,))
+        result = c.fetchone()
+        if result:
+            return result[0]
+        return None
 
     def pending_productinstances(self):
         ret = {}
@@ -68,7 +72,7 @@ class StateDatabase(object):
                 elif force:
                     ret[ret[pid]] = True
         return ret
-
+    
     def add_productinstance_to_be_processed(self, productinstance, force=False):
         with self._connection as c:
             if force:

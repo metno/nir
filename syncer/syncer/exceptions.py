@@ -37,12 +37,16 @@ class MissingStateFile(Exception):
     pass
 
 
-class WDBLoadFailed(Exception):
+class WDBAccessException(Exception):
+    """Any error when accessing wdb database"""
+    pass
+
+class WDBLoadFailed(WDBAccessException):
     """Thrown when a load program failed to load model data into wdb."""
     pass
 
 
-class WDBCacheFailed(Exception):
+class WDBCacheFailed(WDBAccessException):
     """Thrown when WDB can't cache data."""
     pass
 
