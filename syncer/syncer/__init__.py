@@ -44,8 +44,18 @@ def main(argv):
         logging.critical("Could not read logging configuration file: %s" % str(e))
         return syncer.config.EXIT_LOGGING
 
+    exit_code = run(config)
+
+    return exit_code
+
+
+if __name__ == '__main__':
     try:
-        exit_code = run(config)
+        syncer_root_path = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/..')
+        sys.path.append(syncer_root_path)
+        exit_code = main(['--config', os.path.join(syncer_root_path, 'etc', 'config.ini')])
+        logging.info("Exiting with status %d", exit_code)
+        sys.exit(exit_code)
     except:
         exception = traceback.format_exc().split("\n")
         logging.critical("***********************************************************")
@@ -53,13 +63,4 @@ def main(argv):
         logging.critical("***********************************************************")
         for line in exception:
             logging.critical(line)
-        exit_code = 255
-
-    logging.info("Exiting with status %d", exit_code)
-    sys.exit(exit_code)
-
-
-if __name__ == '__main__':
-    syncer_root_path = os.path.realpath(os.path.dirname(os.path.realpath(__file__)) + '/..')
-    sys.path.append(syncer_root_path)
-    main(['--config', os.path.join(syncer_root_path, 'etc', 'config.ini')])
+        sys.exit(255)
