@@ -57,7 +57,6 @@ class WDB2TS(object):
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
     def update(self, datainstance):
-        return
         try:
             self.load_status()
         except syncer.exceptions.WDB2TSMissingContentException as e:

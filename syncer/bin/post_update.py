@@ -1,6 +1,8 @@
 import productstatus.api
 import json
-import urllib.request, urllib.error, urllib.parse
+import urllib.request
+import urllib.error
+import urllib.parse
 from datetime import datetime, timedelta
 
 

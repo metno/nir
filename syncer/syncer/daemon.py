@@ -1,6 +1,5 @@
 import dateutil
 import logging
-import re
 import time
 import configparser
 import productstatus.exceptions
@@ -67,7 +66,6 @@ class Daemon(object):
     def _listen_for_new_events(self):
         try:
             event = self.productstatus_listener.get_next_event()
-            logging.debug('Got event: ' + str(event))
             self._incoming_event(event)
             self.productstatus_listener.save_position()
             return event
@@ -105,6 +103,7 @@ class Daemon(object):
             if event['resource'] == 'datainstance':
                 datainstance = self._get_datainstance(event)
                 if self._has_model_for(datainstance):
+                    logging.debug('Relevant event: ' + str(event))
                     productinstance = datainstance.data.productinstance
                     syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(productinstance.reference_time.timetuple())))
                     self._state_database.add_productinstance_to_be_processed(productinstance)
@@ -113,51 +112,51 @@ class Daemon(object):
 
     def _has_model_for(self, datainstance):
         if datainstance:
+            servicebackend = datainstance.servicebackend
+            product = datainstance.data.productinstance.product
             for m in self.models:
-                product = datainstance.data.productinstance.product
                 model_match = m.product in (product.slug, product.id)
-                filename_match = re.match(m.data_uri_pattern, datainstance.url)
-                if model_match and filename_match:
-                    return True
+                backend_match = m.servicebackend in (servicebackend.slug, servicebackend.id)
+                return model_match and backend_match
         return False
 
-    def _should_process_productinstance(self, productinstance):
-        try:
-            for di in self.api.datainstance.objects.filter(data__productinstance=productinstance):
-                servicebackend = di.servicebackend
-                dataformat = di.format
-                complete = productinstance.complete[servicebackend.resource_uri][dataformat.resource_uri]
-                if complete['file_count']:
-                    return True
-            logging.info('Not yet ready for processing')
-            return False
-        except AttributeError:
-            logging.warning('Unable to find completeness information about data <%s>. Considering incomplete.' % (productinstance.resource_uri,))
-            return False
-
     def _process_productinstance(self, productinstance, force):
-        try:
-            should_process = self._should_process_productinstance(productinstance)
-            if force or should_process:
-                if not should_process:
-                    logging.info('Data is not really ready for loading, but force=True. Attempting to load anyway')
-                reporter = syncer.reporting.TimeReporter()
-                syncer.reporting.stats.incr('load start', 1)
-                for instance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
-                    di = DataInstance(instance, self.models)
-                    self.wdb.load_model_file(di)
-                reporter.report('wdb load')
-                self.wdb.cache_model_run(di)
-                reporter.report('wdb cache')
-                self.wdb2ts.update(di)
-                reporter.report('wdb2ts update')
-                self._state_database.set_loaded(productinstance.id)
-                reporter.report_total('productinstance time to complete')
-                syncer.reporting.stats.incr('load end', 1)
-                syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
-        except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
-            syncer.reporting.stats.incr('load failed', 1)
-            logging.error('Error when loading data: ' + str(e))
+        models = {}
+        for datainstance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
+            for m in self.models:
+                if m.servicebackend in (datainstance.servicebackend.slug, datainstance.servicebackend.id):
+                    if m in models:
+                        models[m].append(datainstance)
+                    else:
+                        models[m] = [datainstance]
+
+        if force and not models:
+            logging.error('Trying to force load productinstance %s, but unable to find model config!')
+            return
+
+        for m in models.items():
+            model = m[0]
+            datainstances = m[1]
+            complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
+            if force or complete:
+                try:
+                    reporter = syncer.reporting.TimeReporter()
+                    syncer.reporting.stats.incr('load start', 1)
+                    for instance in datainstances:
+                        di = DataInstance(instance, model)
+                        self.wdb.load_model_file(di)
+                    reporter.report('wdb load')
+                    self.wdb.cache_model_run(di)
+                    reporter.report('wdb cache')
+                    self.wdb2ts.update(di)
+                    reporter.report('wdb2ts update')
+                    self._state_database.set_loaded(productinstance.id)
+                    reporter.report_total('productinstance time to complete')
+                    syncer.reporting.stats.incr('load end', 1)
+                    syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
+                except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
+                    syncer.reporting.stats.incr('load failed', 1)
+                    logging.error('Error when loading data: ' + str(e))
 
     def _get_datainstance(self, event):
         # Ensure that all events are at least two seconds old
@@ -177,13 +176,10 @@ class Daemon(object):
 class DataInstance(object):
     '''Easier access to datainstance, also makes usage in tests easier'''
 
-    def __init__(self, referenced_datainstance, models):
+    def __init__(self, referenced_datainstance, model):
         self._datainstance = referenced_datainstance
         self._productinstance = self._datainstance.data.productinstance
-        self.model = None
-        for m in models:
-            if re.match(m.data_uri_pattern, self.url()):
-                self.model = m
+        self.model = model
 
     def _verify(self, to_return, name):
         if not to_return:
@@ -200,7 +196,8 @@ class DataInstance(object):
         return self._verify(self._datainstance.url, 'url')
 
     def data_provider(self):
-        return self._verify(self._productinstance.product.wdb_data_provider, 'data provider')
+        return self.model.dataprovider
+#        return self._verify(self._productinstance.product.wdb_data_provider, 'data provider')
 
     def reference_time(self):
         return self._verify(self._productinstance.reference_time, 'reference time')
@@ -225,6 +222,5 @@ class DataInstance(object):
     def related(self, api, models):
         '''Get all datainstance objects with the same productinstance as this object'''
         for instance in api.datainstance.objects.filter(data__productinstance=self._productinstance):
-            i = DataInstance(instance, models)
-            i.model = self.model
+            i = DataInstance(instance, self.model)
             yield i
