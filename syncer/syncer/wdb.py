@@ -107,15 +107,14 @@ class WDB(object):
         else:
             return url  # ...and hope for the best!
 
-    @staticmethod
-    def create_load_command(datainstance):
+    def create_load_command(self, datainstance):
         load_command = [datainstance.model.load_program,
                         '--loadPlaceDefinition',
                         '--dataprovider', datainstance.data_provider()]
         
-        if datainstance.model.ssh_user:
+        if self.user:
             load_command.append('--user')
-            load_command.append(datainstance.model.ssh_user)
+            load_command.append(self.user)
 
         if datainstance.version():
             load_command.append('--dataversion')
