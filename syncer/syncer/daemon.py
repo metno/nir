@@ -151,7 +151,7 @@ class Daemon(object):
                     self.wdb2ts.update(di)
                     reporter.report('wdb2ts update')
                     self._state_database.set_loaded(productinstance.id)
-                    self._state_database.done(productinstance.id)
+                    self._state_database.done(productinstance)
                     reporter.report_total('productinstance time to complete')
                     syncer.reporting.stats.incr('load end', 1)
                     syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
