@@ -43,7 +43,7 @@ class Daemon(object):
         logging.info('Connecting to %s, using client_id=%s and group_id=%s' % (base_url, client_id, group_id))
 
         self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
-        self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=1000)
+        self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000)
 
     def run(self):
         '''Run the main event loop'''
@@ -95,7 +95,7 @@ class Daemon(object):
                 self._process_productinstance(productinstance, force)
             else:
                 logging.debug('Already processed')
-            self._state_database.done(productinstance)
+                self._state_database.done(productinstance)
 
     def _incoming_event(self, event):
         '''Process an event coming from productstatus kafka queue'''
@@ -151,6 +151,7 @@ class Daemon(object):
                     self.wdb2ts.update(di)
                     reporter.report('wdb2ts update')
                     self._state_database.set_loaded(productinstance.id)
+                    self._state_database.done(productinstance.id)
                     reporter.report_total('productinstance time to complete')
                     syncer.reporting.stats.incr('load end', 1)
                     syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
