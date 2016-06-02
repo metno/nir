@@ -136,8 +136,7 @@ class WDB(object):
         else:
             return cmd
 
-    @staticmethod
-    def create_cache_query(datainstance):
+    def create_cache_query(self, datainstance):
         """
         Generate a SQL/WCI query that caches a specific model run.
         """
@@ -145,7 +144,8 @@ class WDB(object):
         # configuration file, as data_provider to the model in question.
         # Modelstatus would likely not contain information about such a model,
         # making it extremely unlikely that any malicious code could run here.
-        return "SELECT wci.begin('wdb'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
+        return "SELECT wci.begin('%(user)s'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
+            'user': self.user,
             'data_provider': datainstance.data_provider(),
             'reference_time': datainstance.reference_time()
         }
@@ -159,7 +159,7 @@ class WDB(object):
         Create an SSH command that runs cacheQuery and ANALYZE against the WDB
         server for the specified model run.
         """
-        cache_query = WDB.create_cache_query(datainstance)
+        cache_query = self.create_cache_query(datainstance)
         analyze_query = WDB.create_analyze_query()
 
         sql_statement = cache_query + '; ' + analyze_query
