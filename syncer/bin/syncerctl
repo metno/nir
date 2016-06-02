@@ -6,16 +6,84 @@ import argparse
 import productstatus.api
 import productstatus.exceptions
 import configparser
+import lxml.etree
 import syncer.config
 import syncer.exceptions
 import syncer.persistence
+import syncer.wdb2ts
+
+def _get_api(args):
+    base_url = args.config.get('productstatus', 'url')
+    verify_ssl = bool(int(args.config.get('productstatus', 'verify_ssl')))
+    return productstatus.api.Api(base_url, verify_ssl=verify_ssl)
+
+class StatusInformation(object):
+    def __init__(self, reference_time='-', updated='-', id='-'):
+        self.reference_time = reference_time
+        self.updated = updated
+        self.id = id
+
+def exec_check(args):
+    
+    api = _get_api(args)
+    database = args.config.get('syncer', 'state_database_file')
+    state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
+    pending = state_database.pending_productinstances()
+    
+    sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
+    sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
+
+    models = [m.strip() for m in args.config.get('syncer', 'models').split(',')]
+    for m in models:
+        subsection = 'model_' + m
+        product_identifier = args.config.get(subsection, 'product')
+        product = api.product[product_identifier]
+        productinstances = api.productinstance.objects
+        productinstances.filter(product=product)
+        productinstances.order_by('-reference_time')
+        
+        available_productinstance = productinstances[0]
+        available = StatusInformation(available_productinstance.reference_time, available_productinstance.created, available_productinstance.id)
+        
+        wdb = StatusInformation()
+        wdb_access = syncer.wdb.WDB(args.config.get('wdb', 'host'), args.config.get('wdb', 'ssh_user'))
+        status = wdb_access.get_status(m)
+        wdb = StatusInformation(status[0], status[1])
+        
+        wdb2ts = StatusInformation()    
+        wdb2ts_services = [s.strip() for s in args.config.get('wdb2ts', 'services').split(',')]
+        wdb2ts_access = syncer.wdb2ts.WDB2TS(args.config.get('wdb2ts', 'base_url'), wdb2ts_services)
+        status_xml = wdb2ts_access.request_status(m)
+        status = lxml.etree.fromstring(status_xml)
+        for dataprovider in status.find('referencetimes').find('dataprovider'):
+            if dataprovider.text.strip() == product.wdb_data_provider:
+                referencetime = dataprovider.find('referencetime').text
+                available = dataprovider.find('updated').text
+                wdb2ts = StatusInformation(referencetime, available)
+                break
+        
+        print(product.wdb_data_provider,
+              args.config.get(subsection, 'model_run_age_warning'),
+              args.config.get(subsection, 'model_run_age_critical'),
+              available.id,
+              available.reference_time,
+              available.updated,
+              wdb.id,
+              wdb.reference_time,
+              wdb.updated,
+              wdb2ts.id,
+              wdb2ts.reference_time,
+              wdb2ts.updated,
+              sep='\n - ')
+        
 
 def exec_load(args):
     try:
-        api = productstatus.api.Api(args.base_url, verify_ssl=args.verify_ssl)
+        api = _get_api(args)
         pi = api.productinstance[args.product_instance_id]
         print('%s = %s' % (args.product_instance_id, pi))
-        state_database = syncer.persistence.StateDatabase(args.database, create_if_missing=False)
+        database = args.config.get('syncer', 'state_database_file')
+        state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
         state_database.add_productinstance_to_be_processed(pi, args.force)
         print('Queued for processing')
         return syncer.config.EXIT_SUCCESS
@@ -32,12 +100,21 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(help='Try `syncerctl <sub-command> --help`')
 
+    # parser for the 'check' command
+    check = sub.add_parser('check', help='Print machine-readable model run status information')
+    check.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
+    check.set_defaults(func=exec_check)
+
     # parser for the 'load' command
     load = sub.add_parser('load', help='Ask Syncer to load and activate a specific product instance')
     load.add_argument('product_instance_id', type=str, help='Product instance id from Productstatus REST API service')
     load.add_argument('--force', action='store_true', help='Ignore sanity checks')
-    load.add_argument('-c', '--config', type=str, help='Read productstatus config from the given file', default=syncer.config.DEFAULT_CONFIG_PATH)
     load.set_defaults(func=exec_load)
+    
+    # common options for status checks
+    for class_ in (check, load):
+        class_.add_argument('-c', '--config', type=str, help='Read productstatus config from the given file', default=syncer.config.DEFAULT_CONFIG_PATH)
+
     
     args = parser.parse_args()
 
@@ -46,9 +123,6 @@ if __name__ == '__main__':
         sys.exit(syncer.config.EXIT_CONFIG)
     config_parser = configparser.SafeConfigParser()
     config_parser.read(args.config)
-    args.database = config_parser.get('syncer', 'state_database_file')
+    args.config = config_parser
     
-    args.base_url = config_parser.get('productstatus', 'url')
-    args.verify_ssl = bool(int(config_parser.get('productstatus', 'verify_ssl')))
-
     sys.exit(args.func(args))
