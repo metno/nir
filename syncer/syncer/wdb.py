@@ -163,7 +163,9 @@ class WDB(object):
         analyze_query = WDB.create_analyze_query()
 
         sql_statement = cache_query + '; ' + analyze_query
-        sql_statement = '"%s"' % (sql_statement,)
+        if self.should_use_ssh():
+            # Quotes are needed when using ssh, but not otherwise
+            sql_statement = '"%s"' % (sql_statement,)
         return self.create_ssh_command(['psql', 'wdb', '-U', self.user, '-c', sql_statement])
 
     def cache_model_run(self, datainstance):
