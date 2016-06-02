@@ -163,9 +163,7 @@ class WDB(object):
         analyze_query = WDB.create_analyze_query()
 
         sql_statement = cache_query + '; ' + analyze_query
-        if self.should_use_ssh():
-            # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
-            sql_statement = '"%s"' % (sql_statement,)
+        sql_statement = '"%s"' % (sql_statement,)
         return self.create_ssh_command(['psql', 'wdb', '-U', self.user, '-c', sql_statement])
 
     def cache_model_run(self, datainstance):
