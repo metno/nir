@@ -117,6 +117,7 @@ class WDB2TS(object):
         """
         try:
             update_url = self.get_update_url(service, datainstance.data_provider(), datainstance.reference_time(), datainstance.version())
+            logging.info('Update URL: ' + update_url)
         except TypeError as e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)
 
