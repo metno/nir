@@ -52,7 +52,7 @@ class WDB2TS(object):
         elif response.status_code >= 400:
             exc = syncer.exceptions.WDB2TSServiceClientErrorException
         else:
-            return response.content
+            return response.content.decode()
 
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
@@ -65,6 +65,7 @@ class WDB2TS(object):
             logging.error("Can not fetch WDB2TS status information: %s", str(e))
         else:
             self.update_wdb2ts(datainstance)
+            logging.info('wdb2ts updated')
 
     def load_status(self):
         """
