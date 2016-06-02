@@ -112,6 +112,10 @@ class WDB(object):
         load_command = [datainstance.model.load_program,
                         '--loadPlaceDefinition',
                         '--dataprovider', datainstance.data_provider()]
+        
+        if datainstance.model.ssh_user:
+            load_command.append('--user')
+            load_command.append(datainstance.model.ssh_user)
 
         if datainstance.version():
             load_command.append('--dataversion')
