@@ -28,8 +28,8 @@ class Daemon(object):
                 self.models.add(syncer.config.ModelConfig.from_config_section(config, 'model_%s' % key))
 
             wdb_host = config.get('wdb', 'host')
-            wdb_ssh_user = config.get('wdb', 'ssh_user')
-            self.wdb = syncer.wdb.WDB(wdb_host, wdb_ssh_user)
+            wdb_user = config.get('wdb', 'user')
+            self.wdb = syncer.wdb.WDB(wdb_host, wdb_user)
 
             state_database_file = config.get('syncer', 'state_database_file')
             self._state_database = syncer.persistence.StateDatabase(state_database_file, create_if_missing=True)
