@@ -168,7 +168,6 @@ class Daemon(object):
         target_event_age = 2.5
         if event_age < target_event_age:
             sleep_time = target_event_age - event_age
-            logging.debug('Sleeping for %f seconds, to allow productstatus to stabilize' % (sleep_time,))
             time.sleep(sleep_time)
 
         return self.api.datainstance[event['id']]
