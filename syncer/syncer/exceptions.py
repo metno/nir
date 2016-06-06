@@ -41,6 +41,7 @@ class WDBAccessException(Exception):
     """Any error when accessing wdb database"""
     pass
 
+
 class WDBLoadFailed(WDBAccessException):
     """Thrown when a load program failed to load model data into wdb."""
     pass

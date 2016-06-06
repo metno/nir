@@ -5,6 +5,7 @@ Functionality relating to WDB2.
 import re
 import subprocess
 import logging
+import psycopg2
 
 import syncer.exceptions
 
@@ -55,7 +56,7 @@ class WDB(object):
 
         load_cmd = self.create_load_command(datainstance)
         cmd = self.create_ssh_command(load_cmd)
-        
+
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
         except TypeError as e:
@@ -111,7 +112,7 @@ class WDB(object):
         load_command = [datainstance.model.load_program,
                         '--loadPlaceDefinition',
                         '--dataprovider', datainstance.data_provider()]
-        
+
         if self.user:
             load_command.append('--user')
             load_command.append(self.user)
@@ -154,7 +155,7 @@ class WDB(object):
     def create_analyze_query():
         return 'ANALYZE'
 
-    def _create_psql_command(self, sql_statement, additional_psql_arguments = []):
+    def _create_psql_command(self, sql_statement, additional_psql_arguments=[]):
         """
         Create an SSH command that runs the given sql query against the WDB
         server.
@@ -162,7 +163,7 @@ class WDB(object):
         if self.should_use_ssh():
             # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
             sql_statement = '"%s"' % (sql_statement,)
-        return self.create_ssh_command(['psql', 'wdb', '-U', 'wdb'] + additional_psql_arguments + ['-c', sql_statement])
+        return self.create_ssh_command(['psql', 'wdb', '-U', self.user] + additional_psql_arguments + ['-c', sql_statement])
 
     def create_cache_model_run_command(self, datainstance):
         """
@@ -180,7 +181,7 @@ class WDB(object):
         Run cacheQuery and ANALYZE against the WDB server for the specified model run.
         """
         logging.info("Updating WDB cache for %s" % datainstance.data_provider())
-        
+
         cmd = self.create_cache_model_run_command(datainstance)
         error_code, stderr, stdout = WDB.execute_command(cmd)
 
@@ -196,11 +197,15 @@ class WDB(object):
         else:
             logging.info("Cache updated successfully.")
 
+    def _get_database_connection(self):
+        connect_string = 'dbname=wdb user=' + self.user
+        if self.host and self.host not in ('localhost', '127.0.0.1'):
+            connect_string += ' host=' + self.host
+        return psycopg2.connect(connect_string)
+
     def get_status(self, data_provider):
-        query = "select wci.begin('wdb'); select referencetime, storetime from wci.read(NULL,NULL, NULL,NULL, NULL,NULL, NULL,NULL::wci.returngid) order by referencetime desc, storetime desc limit 1"
-        cmd = self._create_psql_command(query, ['-t'])
-        error_code, stderr, stdout = WDB.execute_command(cmd)
-        if error_code:
-            raise WDBAccessException('Unable to read wdb database')
-        ret = [s.strip() for s in stdout.decode().split('|')]
-        return ret
+        query = "select wci.begin(%s); select referencetime, storetime from wci.read(ARRAY[%s],NULL, NULL,NULL, NULL,NULL, NULL,NULL::wci.returngid) order by referencetime desc, storetime desc limit 1"
+        with self._get_database_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (self.user, data_provider))
+            return cursor.fetchone()

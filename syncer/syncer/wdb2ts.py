@@ -38,6 +38,23 @@ class WDB2TS(object):
 
         return status_xml
 
+    def _deserialize_datetime(self, input):
+        return productstatus.utils.SerializeBase()._unserialize_datetime(input)
+
+    def get_load_status(self):
+        '''service->data_provider->information'''
+        ret = {}
+        for service in self.status.keys():
+            ret[service] = {}
+            status_xml = self.request_status(service)
+            status = lxml.etree.fromstring(status_xml)
+            for element in status.find('referencetimes'):
+                if element.tag == 'dataprovider':
+                    data = {'referencetime': self._deserialize_datetime(element.find('referencetime').text),
+                            'updated': self._deserialize_datetime(element.find('updated').text)}
+                    ret[service][element.find('name').text] = data
+        return ret
+
     def _get_request(self, url):
         """
         Wrapper for self.session.get with exception handling. Returns body of response.

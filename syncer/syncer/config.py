@@ -22,7 +22,7 @@ class ModelConfig(object):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
 
         data = {}
-        mandatory_options = ['product', 'servicebackend', 'dataprovider', 'load_program', 'model_run_age_warning']
+        mandatory_options = ['product', 'servicebackend', 'data_provider', 'load_program', 'model_run_age_warning']
 
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:

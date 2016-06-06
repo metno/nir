@@ -51,7 +51,7 @@ class StateDatabase(object):
             c.execute('insert into loaded_data (productinstance) values (?)', (productinstance_id,))
             # at the same time, make sure database only contains relatively new data
             c.execute("delete from loaded_data where load_time<datetime('now', '-1 day')")
-            
+
     def get_load_time(self, productinstance_id):
         c = self._connection.execute('select load_time from loaded_data where productinstance=?', (productinstance_id,))
         result = c.fetchone()
@@ -72,7 +72,7 @@ class StateDatabase(object):
                 elif force:
                     ret[ret[pid]] = True
         return ret
-    
+
     def add_productinstance_to_be_processed(self, productinstance, force=False):
         with self._connection as c:
             if force:

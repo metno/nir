@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
+import datetime
 import os
+import json
 import sys
 import argparse
 import productstatus.api
@@ -11,71 +13,105 @@ import syncer.config
 import syncer.exceptions
 import syncer.persistence
 import syncer.wdb2ts
+from _datetime import tzinfo
 
 def _get_api(args):
     base_url = args.config.get('productstatus', 'url')
     verify_ssl = bool(int(args.config.get('productstatus', 'verify_ssl')))
     return productstatus.api.Api(base_url, verify_ssl=verify_ssl)
 
-class StatusInformation(object):
-    def __init__(self, reference_time='-', updated='-', id='-'):
-        self.reference_time = reference_time
-        self.updated = updated
-        self.id = id
-
-def exec_check(args):
+def create_status_information(reference_time=None, updated=None, id=None):
+    return {'reference_time': reference_time,
+            'updated': updated,
+            'id': id}
     
-    api = _get_api(args)
-    database = args.config.get('syncer', 'state_database_file')
-    state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
-    pending = state_database.pending_productinstances()
-    
-    sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
-    sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
-
-    models = [m.strip() for m in args.config.get('syncer', 'models').split(',')]
-    for m in models:
-        subsection = 'model_' + m
-        product_identifier = args.config.get(subsection, 'product')
+        
+def get_status_information_available(section):
+    try:
+        api = _get_api(args)
+        product_identifier = section['product']
         product = api.product[product_identifier]
         productinstances = api.productinstance.objects
         productinstances.filter(product=product)
         productinstances.order_by('-reference_time')
+        productinstances.limit(1)
+        productinstance = productinstances[0]
+        return create_status_information(productinstance.reference_time, productinstance.created, productinstance.id)
+    except productstatus.exceptions.ResourceNotFoundException:
+        return create_status_information()
+
+def get_status_information_wdb(host, user, model):
+        wdb_access = syncer.wdb.WDB(host, user)
+        status = wdb_access.get_status(model)
+        if status:
+            return create_status_information(status[0], status[1])
+        else:
+            return create_status_information()
         
-        available_productinstance = productinstances[0]
-        available = StatusInformation(available_productinstance.reference_time, available_productinstance.created, available_productinstance.id)
+def get_status_information_wdb2ts(base_url, services, section):
+    try:
+        wdb2ts_access = syncer.wdb2ts.WDB2TS(base_url, services)
+        for info in wdb2ts_access.get_load_status().values():
+            if section['data_provider'] in info:
+                status_information = info[section['data_provider']]
+                if status_information:
+                    return create_status_information(status_information['referencetime'], status_information['updated'])
+    except syncer.exceptions.WDB2TSServiceClientErrorException:
+        pass
+    return create_status_information()
         
-        wdb = StatusInformation()
-        wdb_access = syncer.wdb.WDB(args.config.get('wdb', 'host'), args.config.get('wdb', 'ssh_user'))
-        status = wdb_access.get_status(m)
-        wdb = StatusInformation(status[0], status[1])
-        
-        wdb2ts = StatusInformation()    
-        wdb2ts_services = [s.strip() for s in args.config.get('wdb2ts', 'services').split(',')]
-        wdb2ts_access = syncer.wdb2ts.WDB2TS(args.config.get('wdb2ts', 'base_url'), wdb2ts_services)
-        status_xml = wdb2ts_access.request_status(m)
-        status = lxml.etree.fromstring(status_xml)
-        for dataprovider in status.find('referencetimes').find('dataprovider'):
-            if dataprovider.text.strip() == product.wdb_data_provider:
-                referencetime = dataprovider.find('referencetime').text
-                available = dataprovider.find('updated').text
-                wdb2ts = StatusInformation(referencetime, available)
-                break
-        
-        print(product.wdb_data_provider,
-              args.config.get(subsection, 'model_run_age_warning'),
-              args.config.get(subsection, 'model_run_age_critical'),
-              available.id,
-              available.reference_time,
-              available.updated,
-              wdb.id,
-              wdb.reference_time,
-              wdb.updated,
-              wdb2ts.id,
-              wdb2ts.reference_time,
-              wdb2ts.updated,
-              sep='\n - ')
-        
+def get_status_information_for_model(args, model):
+    subsection = 'model_' + model
+
+    return {'model': {'data_provider': args.config.get(subsection, 'data_provider'),
+                      'age_warning': args.config.get(subsection, 'model_run_age_warning'),
+                      'age_critical': args.config.get(subsection, 'model_run_age_critical')},
+            'available': get_status_information_available(args.config[subsection]),
+            'wdb': get_status_information_wdb(args.config.get('wdb', 'host'), args.config.get('wdb', 'user'), args.config.get(subsection, 'data_provider')),
+            'wdb2ts': get_status_information_wdb2ts(args.config.get('wdb2ts', 'base_url'), args.config.get('wdb2ts', 'services').split(','), args.config[subsection])}
+    
+def get_status_information(args):
+    models = [m.strip() for m in args.config.get('syncer', 'models').split(',')]
+    if hasattr(args, 'model') and args.model:
+        models= [m for m in models if m in args.model]
+    ret = {}
+    for model in models:
+        ret[model] = get_status_information_for_model(args, model)
+    return ret
+
+def _serialize(what):
+    if isinstance(what, datetime.datetime):
+        t = what.astimezone(datetime.timezone.utc)
+        return t.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+def _deserialize_datetime(input):
+    ret = datetime.datetime.strptime(input, '%Y-%m-%dT%H:%M:%SZ')
+    ret = ret.replace(tzinfo=datetime.timezone.utc)
+    return ret
+
+def exec_check(args):
+    status_information = get_status_information(args)
+    sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
+    sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
+    
+    for si in status_information.values():
+        print(si['model']['data_provider'] or '-',
+              si['model']['age_warning'] or '-',
+              si['model']['age_critical'] or '-',
+              si['available']['id'] or '-',
+              _serialize(si['available']['reference_time']) or '-',
+              _serialize(si['available']['updated']) or '-',
+              si['wdb']['id'] or '-',
+              _serialize(si['wdb']['reference_time']) or '-',
+              _serialize(si['wdb']['updated']) or '-',
+              si['wdb2ts']['id'] or '-',
+              _serialize(si['wdb2ts']['reference_time']) or '-',
+              _serialize(si['wdb2ts']['updated']) or '-',
+              sep=';')
+
+def exec_status(args):
+    status_information = get_status_information(args)
+    print(json.dumps(status_information, sort_keys=True, indent=4, separators=(',', ': '), default=_serialize))
 
 def exec_load(args):
     try:
@@ -105,6 +141,11 @@ if __name__ == '__main__':
     check.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
     check.set_defaults(func=exec_check)
 
+    # parser for the 'check' command
+    status = sub.add_parser('status', help='Print model run status information')
+    status.add_argument('--model', action='append', help='Show information only from this model. Can be specified multiple times.')
+    status.set_defaults(func=exec_status)
+
     # parser for the 'load' command
     load = sub.add_parser('load', help='Ask Syncer to load and activate a specific product instance')
     load.add_argument('product_instance_id', type=str, help='Product instance id from Productstatus REST API service')
@@ -112,7 +153,7 @@ if __name__ == '__main__':
     load.set_defaults(func=exec_load)
     
     # common options for status checks
-    for class_ in (check, load):
+    for class_ in (check, status, load):
         class_.add_argument('-c', '--config', type=str, help='Read productstatus config from the given file', default=syncer.config.DEFAULT_CONFIG_PATH)
 
     

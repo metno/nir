@@ -134,9 +134,7 @@ class Daemon(object):
             logging.error('Trying to force load productinstance %s, but unable to find model config!')
             return
 
-        for m in models.items():
-            model = m[0]
-            datainstances = m[1]
+        for model, datainstances in models.items():
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
                 try:
@@ -196,7 +194,7 @@ class DataInstance(object):
         return self._verify(self._datainstance.url, 'url')
 
     def data_provider(self):
-        return self.model.dataprovider
+        return self.model.data_provider
 #        return self._verify(self._productinstance.product.wdb_data_provider, 'data provider')
 
     def reference_time(self):

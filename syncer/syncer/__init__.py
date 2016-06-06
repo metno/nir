@@ -34,7 +34,7 @@ def main(argv):
 
     try:
         config = syncer.config.get_config(argv)
-    
+
         # Set up proper logging
         try:
             logging.config.fileConfig(config.args.config, disable_existing_loggers=True)
@@ -44,7 +44,7 @@ def main(argv):
         except IOError as e:
             logging.critical("Could not read logging configuration file: %s" % str(e))
             return syncer.config.EXIT_LOGGING
-    
+
         return run(config)
     except:
         exception = traceback.format_exc().split("\n")
