@@ -100,7 +100,7 @@ def exec_load(args):
         print('%s = %s' % (args.product_instance_id, pi))
         database = args.config.get('syncer', 'state_database_file')
         state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
-        state_database.add_productinstance_to_be_processed(pi, args.force)
+        state_database.add_productinstance_to_be_processed(pi, force=args.force, even_if_previously_loaded=True)
         print('Queued for processing')
         return syncer.config.EXIT_SUCCESS
     except syncer.exceptions.MissingStateFile:

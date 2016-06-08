@@ -105,9 +105,9 @@ class StateDatabase(object):
                     ret[ret[pid]] = True
         return ret
 
-    def add_productinstance_to_be_processed(self, productinstance, force=False):
+    def add_productinstance_to_be_processed(self, productinstance, force=False, even_if_previously_loaded=False):
         with Transaction(self._connection) as c:
-            if force:
+            if even_if_previously_loaded:
                 c.execute('delete from loaded_data where productinstance=?', (productinstance.id,))
             c.execute('insert into pending_jobs (product_id, reference_time, version, productinstance_id, force) values (?, ?, ?, ?, ?)',
                       (productinstance.product.id, productinstance.reference_time, productinstance.version, productinstance.id, force))
