@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import datetime
 import os
 import json
 import sys
@@ -8,12 +7,11 @@ import argparse
 import productstatus.api
 import productstatus.exceptions
 import configparser
-import lxml.etree
 import syncer.config
 import syncer.exceptions
 import syncer.persistence
-import syncer.wdb2ts
-from _datetime import tzinfo
+from datetime import tzinfo, datetime, timezone
+
 
 def _get_api(args):
     base_url = args.config.get('productstatus', 'url')
@@ -24,51 +22,36 @@ def create_status_information(reference_time=None, updated=None, id=None):
     return {'reference_time': reference_time,
             'updated': updated,
             'id': id}
-    
-        
-def get_status_information_available(section):
-    try:
-        api = _get_api(args)
-        product_identifier = section['product']
-        product = api.product[product_identifier]
-        productinstances = api.productinstance.objects
-        productinstances.filter(product=product)
-        productinstances.order_by('-reference_time')
-        productinstances.limit(1)
-        productinstance = productinstances[0]
-        return create_status_information(productinstance.reference_time, productinstance.created, productinstance.id)
-    except productstatus.exceptions.ResourceNotFoundException:
+
+def _get_status_information_from_db(state_database, model, type):
+    incoming = state_database.get_last_incoming(model, type)
+    if incoming:
+        return create_status_information(incoming[1], incoming[2], incoming[0])
+    else:
         return create_status_information()
 
-def get_status_information_wdb(host, user, model):
-        wdb_access = syncer.wdb.WDB(host, user)
-        status = wdb_access.get_status(model)
-        if status:
-            return create_status_information(status[0], status[1])
-        else:
-            return create_status_information()
-        
-def get_status_information_wdb2ts(base_url, services, section):
-    try:
-        wdb2ts_access = syncer.wdb2ts.WDB2TS(base_url, services)
-        for info in wdb2ts_access.get_load_status().values():
-            if section['data_provider'] in info:
-                status_information = info[section['data_provider']]
-                if status_information:
-                    return create_status_information(status_information['referencetime'], status_information['updated'])
-    except syncer.exceptions.WDB2TSServiceClientErrorException:
-        pass
-    return create_status_information()
-        
-def get_status_information_for_model(args, model):
-    subsection = 'model_' + model
+def get_status_information_available(state_database, model):
+    return _get_status_information_from_db(state_database, model, syncer.persistence.StateDatabase.DATA_AVAILABLE)
 
-    return {'model': {'data_provider': args.config.get(subsection, 'data_provider'),
-                      'age_warning': args.config.get(subsection, 'model_run_age_warning'),
-                      'age_critical': args.config.get(subsection, 'model_run_age_critical')},
-            'available': get_status_information_available(args.config[subsection]),
-            'wdb': get_status_information_wdb(args.config.get('wdb', 'host'), args.config.get('wdb', 'user'), args.config.get(subsection, 'data_provider')),
-            'wdb2ts': get_status_information_wdb2ts(args.config.get('wdb2ts', 'base_url'), args.config.get('wdb2ts', 'services').split(','), args.config[subsection])}
+def get_status_information_wdb(state_database, model):
+    return _get_status_information_from_db(state_database, model, syncer.persistence.StateDatabase.DATA_WDB_OK)
+         
+def get_status_information_wdb2ts(state_database, model):
+    return _get_status_information_from_db(state_database, model, syncer.persistence.StateDatabase.DATA_WDB2TS_OK)
+
+def get_status_information_config(args, model):
+    subsection = 'model_' + model
+    return {'data_provider': args.config.get(subsection, 'data_provider'),
+            'age_warning': args.config.get(subsection, 'model_run_age_warning'),
+            'age_critical': args.config.get(subsection, 'model_run_age_critical')}
+
+def get_status_information_for_model(args, model):
+    database = args.config.get('syncer', 'state_database_file')
+    state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
+    return {'model': get_status_information_config(args, model),
+            'available': get_status_information_available(state_database, model),
+            'wdb': get_status_information_wdb(state_database, model),
+            'wdb2ts': get_status_information_wdb2ts(state_database, model)}
     
 def get_status_information(args):
     models = [m.strip() for m in args.config.get('syncer', 'models').split(',')]
@@ -80,20 +63,17 @@ def get_status_information(args):
     return ret
 
 def _serialize(what):
-    if isinstance(what, datetime.datetime):
-        t = what.astimezone(datetime.timezone.utc)
+    if isinstance(what, datetime):
+        if what.tzinfo:
+            t = what.astimezone(timezone.utc)
+        else:
+            t = what
         return t.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-def _deserialize_datetime(input):
-    ret = datetime.datetime.strptime(input, '%Y-%m-%dT%H:%M:%SZ')
-    ret = ret.replace(tzinfo=datetime.timezone.utc)
-    return ret
 
 def exec_check(args):
     status_information = get_status_information(args)
     sys.stderr.write("# data_provider; model_run_age_warning; model_run_age_critical; model_run_id; available_reference_time; available_updated; wdb_run_id; wdb_reference_time; wdb_updated; wdb2ts_run_id; wdb2ts_reference_time; wdb2ts_updated\n")
     sys.stderr.write("# missing values denoted with a dash, lines beginning with a hash are comments\n")
-    
     for si in status_information.values():
         print(si['model']['data_provider'] or '-',
               si['model']['age_warning'] or '-',
@@ -129,8 +109,6 @@ def exec_load(args):
     except productstatus.exceptions.ProductstatusException as e:
         print('Error when contacting productstatus service:', str(e))
         return syncer.config.EXIT_CONNECT_PRODUCTSTATUS
-    
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

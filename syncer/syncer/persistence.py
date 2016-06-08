@@ -11,7 +11,7 @@ class StateDatabase(object):
         database_already_exists = os.path.exists(db_file) and db_file != ':memory:'
         if not database_already_exists and not create_if_missing:
             raise syncer.exceptions.MissingStateFile()
-        self._connection = sqlite3.connect(db_file)
+        self._connection = sqlite3.connect(db_file, detect_types=sqlite3.PARSE_DECLTYPES)
         if not database_already_exists:
             self._initialize_database()
         self._update()
@@ -34,13 +34,10 @@ class StateDatabase(object):
                 c.execute('create table loaded_data (productinstance text primary key, load_time timestamp not null default current_timestamp)')
                 c.execute('create table pending_jobs (product_id text, reference_time timestamp not null, version int not null, productinstance_id text not null, force boolean not null default false)')
                 c.execute('insert into version (version) values (1)')
-#         if version < 2:
-#             with self._connection as c:
-#                 c.execute('alter table pending_jobs rename to pending_jobs_old')
-#                 c.execute('create table pending_jobs (product_id text, reference_time timestamp not null, version int not null, productinstance_id text not null, force boolean not null default false, pending_since timestamp not null default current_timestamp)')
-#                 c.execute('insert into pending_jobs (select product_id, reference_time, version, productinstance_id, force from pending_jobs_old)')
-#                 c.execute('drop table pending_jobs_old')
-#                 c.execute('insert into version (version) values (2)')
+        if version < 2:
+            with self._connection as c:
+                c.execute('create table last_data (model text not null, type text not null, datainstanceid text not null, reference_time timestamp not null, time_done timestamp not null default current_timestamp, constraint umt unique (model, type))')
+                c.execute('insert into version (version) values (2)')
 
     def is_loaded(self, productinstance_id):
         c = self._connection.execute('select load_time from loaded_data where productinstance=?', (productinstance_id,))
@@ -59,6 +56,20 @@ class StateDatabase(object):
             return result[0]
         return None
 
+    DATA_AVAILABLE = 'data available'
+    DATA_WDB_OK = 'data wdb ok'
+    DATA_WDB2TS_OK = 'data wdb2ts ok'
+    DATA_DONE = 'data ok'
+     
+    def set_last_incoming(self, model, type, datainstanceid, reference_time):
+        with self._connection as c:
+            c.execute('insert or replace into last_data (model, type, datainstanceid, reference_time) VALUES (?, ?, ?, ?)', (model, type, datainstanceid, reference_time.replace(tzinfo=None)))
+
+    def get_last_incoming(self, model, type):
+        c = self._connection.execute('select datainstanceid, reference_time, time_done from last_data where model=? and type=?', (model, type))
+        result = c.fetchone()
+        return result
+    
     def pending_productinstances(self):
         ret = {}
         c1 = self._connection.cursor()

@@ -18,8 +18,10 @@ class ModelConfig(object):
         [setattr(self, key, value) for key, value in data.items()]
 
     @staticmethod
-    def from_config_section(config, section_name):
+    def from_config_section(config, model_name):
         """Return config options for a model. Raise exception if mandatory config option is missing"""
+
+        section_name = 'model_%s' % (model_name,)
 
         data = {}
         mandatory_options = ['product', 'servicebackend', 'data_provider', 'load_program', 'model_run_age_warning']
@@ -34,6 +36,8 @@ class ModelConfig(object):
         for param in ['model_run_age_warning', 'model_run_age_critical']:
             if param in data:
                 data[param] = int(data[param])
+
+        data['model'] = model_name
 
         return ModelConfig(data)
 

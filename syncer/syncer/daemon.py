@@ -9,6 +9,7 @@ import syncer.exceptions
 import syncer.persistence
 import syncer.reporting
 from datetime import datetime
+from datetime import timezone
 
 
 class Daemon(object):
@@ -25,7 +26,7 @@ class Daemon(object):
             model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
             self.models = set()
             for key in model_keys:
-                self.models.add(syncer.config.ModelConfig.from_config_section(config, 'model_%s' % key))
+                self.models.add(syncer.config.ModelConfig.from_config_section(config, key))
 
             wdb_host = config.get('wdb', 'host')
             wdb_user = config.get('wdb', 'user')
@@ -33,6 +34,8 @@ class Daemon(object):
 
             state_database_file = config.get('syncer', 'state_database_file')
             self._state_database = syncer.persistence.StateDatabase(state_database_file, create_if_missing=True)
+            
+            self.reporter = syncer.reporting.StoringStatsClient(self._state_database)
 
             # Get all wdb2ts services from comma separated list in config
             wdb2ts_services = [s.strip() for s in config.get('wdb2ts', 'services').split(',')]
@@ -102,23 +105,25 @@ class Daemon(object):
         try:
             if event['resource'] == 'datainstance':
                 datainstance = self._get_datainstance(event)
-                if self._has_model_for(datainstance):
-                    logging.debug('Relevant event: ' + str(event))
+                for model in self._get_models_for(datainstance):
+                    logging.debug('Relevant event for %s: %s' % (model, str(event)))
                     productinstance = datainstance.data.productinstance
-                    syncer.reporting.stats.gauge('reference_time last seen', int(time.mktime(productinstance.reference_time.timetuple())))
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, datainstance.id, productinstance.reference_time)
                     self._state_database.add_productinstance_to_be_processed(productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
 
-    def _has_model_for(self, datainstance):
+    def _get_models_for(self, datainstance):
+        ret = []
         if datainstance:
             servicebackend = datainstance.servicebackend
             product = datainstance.data.productinstance.product
             for m in self.models:
                 model_match = m.product in (product.slug, product.id)
                 backend_match = m.servicebackend in (servicebackend.slug, servicebackend.id)
-                return model_match and backend_match
-        return False
+                if model_match and backend_match:
+                    ret.append(m)
+        return ret
 
     def _process_productinstance(self, productinstance, force):
         models = {}
@@ -138,23 +143,25 @@ class Daemon(object):
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
                 try:
-                    reporter = syncer.reporting.TimeReporter()
-                    syncer.reporting.stats.incr('load start', 1)
+                    reporter = self.reporter.time_reporter()
+                    self.reporter.incr('load start', 1)
                     for instance in datainstances:
                         di = DataInstance(instance, model)
                         self.wdb.load_model_file(di)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance.id, productinstance.reference_time)
                     reporter.report('wdb load')
                     self.wdb.cache_model_run(di)
                     reporter.report('wdb cache')
                     self.wdb2ts.update(di)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance.id, productinstance.reference_time)
                     reporter.report('wdb2ts update')
                     self._state_database.set_loaded(productinstance.id)
                     self._state_database.done(productinstance)
                     reporter.report_total('productinstance time to complete')
-                    syncer.reporting.stats.incr('load end', 1)
-                    syncer.reporting.stats.gauge('reference_time last successful', int(time.mktime(productinstance.reference_time.timetuple())))
+                    self.reporter.incr('load end', 1)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_DONE, productinstance.id, productinstance.reference_time)
                 except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
-                    syncer.reporting.stats.incr('load failed', 1)
+                    self.reporter.incr('load failed', 1)
                     logging.error('Error when loading data: ' + str(e))
 
     def _get_datainstance(self, event):
