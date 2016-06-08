@@ -108,7 +108,7 @@ class Daemon(object):
                 for model in self._get_models_for(datainstance):
                     logging.debug('Relevant event for %s: %s' % (model, str(event)))
                     productinstance = datainstance.data.productinstance
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, datainstance.id, productinstance.reference_time)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, datainstance, productinstance.reference_time)
                     self._state_database.add_productinstance_to_be_processed(productinstance)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
@@ -148,18 +148,18 @@ class Daemon(object):
                     for instance in datainstances:
                         di = DataInstance(instance, model)
                         self.wdb.load_model_file(di)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance.id, productinstance.reference_time)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance, productinstance.reference_time)
                     reporter.report('wdb load')
                     self.wdb.cache_model_run(di)
                     reporter.report('wdb cache')
                     self.wdb2ts.update(di)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance.id, productinstance.reference_time)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance, productinstance.reference_time)
                     reporter.report('wdb2ts update')
                     self._state_database.set_loaded(productinstance.id)
                     self._state_database.done(productinstance)
                     reporter.report_total('productinstance time to complete')
                     self.reporter.incr('load end', 1)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_DONE, productinstance.id, productinstance.reference_time)
+                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_DONE, productinstance, productinstance.reference_time)
                 except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
                     self.reporter.incr('load failed', 1)
                     logging.error('Error when loading data: ' + str(e))
