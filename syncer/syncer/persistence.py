@@ -5,19 +5,19 @@ import logging
 
 
 class Transaction(object):
-    '''Add automatic transaction handling to database. The given connection 
-    must have isolation_level=None. See 
-    https://docs.python.org/3/library/sqlite3.html#sqlite3-controlling-transactions 
+    '''Add automatic transaction handling to database. The given connection
+    must have isolation_level=None. See
+    https://docs.python.org/3/library/sqlite3.html#sqlite3-controlling-transactions
     for information about why this is neccessary in this case.'''
-    
+
     def __init__(self, database_connection):
         self.database_connection = database_connection
-        
+
     def __enter__(self):
         self.cursor = self.database_connection.cursor()
         self.cursor.execute('begin')
         return self.cursor
-    
+
     def __exit__(self, type, value, traceback):
         if type is None:
             self.cursor.execute('commit')
@@ -81,7 +81,7 @@ class StateDatabase(object):
     DATA_WDB_OK = 'data wdb ok'
     DATA_WDB2TS_OK = 'data wdb2ts ok'
     DATA_DONE = 'data ok'
-     
+
     def set_last_incoming(self, model, type, datainstanceid, reference_time):
         with self._connection as c:
             c.execute('insert or replace into last_data (model, type, datainstanceid, reference_time) VALUES (?, ?, ?, ?)', (model, type, datainstanceid, reference_time.replace(tzinfo=None)))
@@ -90,7 +90,7 @@ class StateDatabase(object):
         c = self._connection.execute('select datainstanceid, reference_time, time_done from last_data where model=? and type=?', (model, type))
         result = c.fetchone()
         return result
-    
+
     def pending_productinstances(self):
         ret = {}
         c1 = self._connection.cursor()

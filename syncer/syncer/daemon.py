@@ -9,7 +9,6 @@ import syncer.exceptions
 import syncer.persistence
 import syncer.reporting
 from datetime import datetime
-from datetime import timezone
 
 
 class Daemon(object):
@@ -34,7 +33,7 @@ class Daemon(object):
 
             state_database_file = config.get('syncer', 'state_database_file')
             self._state_database = syncer.persistence.StateDatabase(state_database_file, create_if_missing=True)
-            
+
             self.reporter = syncer.reporting.StoringStatsClient(self._state_database)
 
             # Get all wdb2ts services from comma separated list in config
