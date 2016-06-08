@@ -10,10 +10,10 @@ class StoringStatsClient(statsd.StatsClient):
         statsd.StatsClient.__init__(self, 'localhost', 8125)
         self.state_database = state_database
 
-    def report_data_event(self, model, type, datainstance, reference_time):
-        self.state_database.set_last_incoming(model, type, datainstance.resource_uri, reference_time)
+    def report_data_event(self, model, type, datainstance):
+        self.state_database.set_last_incoming(model, type, datainstance.resource_uri, datainstance.reference_time)
         self.gauge(type + ' ' + model,
-                   (reference_time - datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)).total_seconds())
+                   (datainstance.reference_time - datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)).total_seconds())
 
     def time_reporter(self):
         return TimeReporter(self)
