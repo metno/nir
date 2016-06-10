@@ -19,8 +19,6 @@ class Daemon(object):
         try:
             base_url = config.get('productstatus', 'url')
             verify_ssl = bool(int(config.get('productstatus', 'verify_ssl')))
-            client_id = config.get('productstatus', 'client_id') if 'client_id' in config.section_keys('productstatus') else None
-            group_id = config.get('productstatus', 'group_id') if 'group_id' in config.section_keys('productstatus') else None
 
             model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
             self.models = set()
@@ -42,7 +40,7 @@ class Daemon(object):
         except configparser.Error as e:
             raise syncer.exceptions.ConfigurationException(e)
 
-        logging.info('Connecting to %s, using client_id=%s and group_id=%s' % (base_url, client_id, group_id))
+        logging.info('Connecting to %s' % (base_url))
 
         self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
         self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000)
