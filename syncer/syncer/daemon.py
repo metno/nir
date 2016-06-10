@@ -84,7 +84,10 @@ class Daemon(object):
             productinstances.filter(product=product)
             productinstances.order_by('-reference_time')
             productinstances.limit(2)  # two in case the latest is not yet complete
-            for idx in range(2):
+            count = productinstances.count()
+            if not count:
+                logging.info('Product <%s> has no instance yet' % (product.slug))
+            for idx in range(min(2, count)):
                 pi = productinstances[idx]
                 self._state_database.add_productinstance_to_be_processed(pi)
 
