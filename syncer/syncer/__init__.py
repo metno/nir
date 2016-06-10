@@ -20,6 +20,7 @@ DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
 def run(config):
     try:
         daemon = syncer.daemon.Daemon(config)
+        logging.info("Syncer is started")
         daemon.run()
     except syncer.exceptions.ConfigurationException as e:
         logging.critical(str(e))
