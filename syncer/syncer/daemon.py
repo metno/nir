@@ -43,17 +43,17 @@ class Daemon(object):
 
         logging.info('Connecting to %s' % (base_url))
 
-        try:
-            while True:
+        while True:
+            try:
                 self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
                 self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000)
                 break
-        except kafka.errors.KafkaError as e:
-            if e.retriable:
-                logging.debug(e)
-                time.sleep(1)
-            else:
-                raise e
+            except kafka.errors.KafkaError as e:
+                if e.retriable:
+                    logging.debug(e)
+                    time.sleep(1)
+                else:
+                    raise
 
     def run(self):
         '''Run the main event loop'''
