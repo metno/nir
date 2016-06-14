@@ -50,8 +50,11 @@ class Daemon(object):
                 break
             except kafka.errors.KafkaError as e:
                 if e.retriable:
-                    logging.debug(e)
-                    time.sleep(1)
+                    if str(e):
+                        logging.warning(str(e))
+                    else:  # kafka errors seem to often come without any explanatory text
+                        logging.warning(type(e).__name__)
+                    time.sleep(5)
                 else:
                     raise
 
