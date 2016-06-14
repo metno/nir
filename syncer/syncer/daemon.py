@@ -60,8 +60,16 @@ class Daemon(object):
         logging.debug('Awaiting events')
         while True:
             try:
+                # Hack to avoid a race condition at startup. Will ensure that
+                # all events received after this call are properly processed.
+                # If this is not called, anything that happens after having
+                # called self._add_latest_events_from_server and before the
+                # next self._listen_for_new_events will be lost:
+                self._listen_for_new_events()
+
                 # Collect any old events
                 self._add_latest_events_from_server()
+                logging.info('Got and sorted all relevant old events')
                 while True:
                     self._process_pending_productinstances()
                     self._listen_for_new_events()
@@ -82,12 +90,22 @@ class Daemon(object):
         except productstatus.exceptions.EventTimeoutException:
             return None
 
+    def _dataformat_for_model(self, model):
+        models = {'/usr/lib/wdb/netcdfLoad': 'netcdf',
+                  '/usr/lib/wdb/feltLoad': 'felt',
+                  '/usr/lib/wdb/gribLoad': 'grib',
+                  }
+        try:
+            return models[model.load_program]
+        except KeyError:
+            logging.error('Unable to understand what type of loader %s is.' % (model.load_program,))
+            raise
+
     def _add_latest_events_from_server(self):
-        '''Find the latest events from server, and add them to the processing queue'''
-        products = [m.product for m in self.models]
-        for p in products:
-            product = self.api.product[p]
-            logging.info('Product: %s' % (product.slug))
+        '''Find the latest events from server, and add them to the processing queue.'''
+        # Note that a product instance may not have associated datainstances when it is discovered here.
+        for m in self.models:
+            product = self.api.product[m.product]
             productinstances = self.api.productinstance.objects
             productinstances.filter(product=product)
             productinstances.order_by('-reference_time')
@@ -97,12 +115,19 @@ class Daemon(object):
                 logging.info('Product <%s> has no instance yet' % (product.slug))
             for idx in range(min(2, count)):
                 pi = productinstances[idx]
-                self._state_database.add_productinstance_to_be_processed(pi)
+                try:
+                    complete = pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]
+                except KeyError:
+                    complete = False  # no completeness information available means not complete
+                if complete:
+                    self._state_database.add_productinstance_to_be_processed(pi)
+                else:
+                    logging.debug('Skipping %s on startup, since it seems to have no useable datainstance yet' % (pi.resource_uri,))
 
     def _process_pending_productinstances(self):
         for productinstance_id, force in list(self._state_database.pending_productinstances().items()):
             productinstance = self.api.productinstance[productinstance_id]
-            logging.debug('Pending productinstance %s. Force=%s' % (productinstance_id, force))
+            logging.debug('Pending: %s. Force=%s' % (productinstance.resource_uri, force))
             if not self._state_database.is_loaded(productinstance_id):
                 logging.debug('Processing')
                 self._process_productinstance(productinstance, force)
@@ -147,8 +172,8 @@ class Daemon(object):
 
         if force and not models:
             logging.error('Trying to force load productinstance %s, but unable to find model config!')
-            return
-
+        elif not models:
+            logging.info('No data available for %s (yet)' % (productinstance.resource_uri))
         for model, datainstances in models.items():
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
@@ -173,6 +198,8 @@ class Daemon(object):
                 except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
                     self.reporter.incr('load failed', 1)
                     logging.error('Error when loading data: ' + str(e))
+            elif not complete:
+                logging.debug('Not complete')
 
     def _get_datainstance(self, event):
         # Ensure that all events are at least two seconds old
