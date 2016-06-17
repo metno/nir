@@ -167,11 +167,12 @@ class Daemon(object):
         models = {}
         for datainstance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
             for m in self.models:
-                if m.servicebackend in (datainstance.servicebackend.slug, datainstance.servicebackend.id):
-                    if m in models:
-                        models[m].append(datainstance)
-                    else:
-                        models[m] = [datainstance]
+                if m.product in (productinstance.product.slug, productinstance.product.id):
+                    if m.servicebackend in (datainstance.servicebackend.slug, datainstance.servicebackend.id):
+                        if m in models:
+                            models[m].append(datainstance)
+                        else:
+                            models[m] = [datainstance]
 
         if force and not models:
             logging.error('Trying to force load productinstance %s, but unable to find model config!')
