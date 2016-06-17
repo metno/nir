@@ -6,7 +6,6 @@ import re
 import subprocess
 import logging
 import psycopg2
-
 import syncer.exceptions
 
 # Success
@@ -54,9 +53,10 @@ class WDB(object):
 
         logging.info("Loading file %s" % datainstance.url())
 
+
         load_cmd = self.create_load_command(datainstance)
         cmd = self.create_ssh_command(load_cmd)
-
+        logging.debug(' '.join(cmd))
         try:
             exit_code, stderr, stdout = WDB.execute_command(cmd)
         except TypeError as e:
@@ -132,8 +132,14 @@ class WDB(object):
         return self.host not in ('localhost', '127.0.0.1')
 
     def create_ssh_command(self, cmd):
+        space = re.compile(r'\s')
         if self.should_use_ssh():
-            return ["ssh", "{0}@{1}".format(self.user, self.host)] + cmd
+            new_command = []
+            for element in cmd:
+                if space.search(element):
+                    element = "'%s'" % (element.replace("'", "\\'"),)
+                new_command.append(element)
+            return ["ssh", "{0}@{1}".format(self.user, self.host), '"' + ' '.join(new_command) + '"']
         else:
             return cmd
 
@@ -160,9 +166,6 @@ class WDB(object):
         Create an SSH command that runs the given sql query against the WDB
         server.
         """
-        if self.should_use_ssh():
-            # If you run this without ssh, this will fail, since the quotes surrounding the sql is not valid for subprocess.popen
-            sql_statement = '"%s"' % (sql_statement,)
         return self.create_ssh_command(['psql', 'wdb', '-U', self.user] + additional_psql_arguments + ['-c', sql_statement])
 
     def create_cache_model_run_command(self, datainstance):
@@ -183,7 +186,9 @@ class WDB(object):
         logging.info("Updating WDB cache for %s" % datainstance.data_provider())
 
         cmd = self.create_cache_model_run_command(datainstance)
+        logging.debug(' '.join(cmd))
         error_code, stderr, stdout = WDB.execute_command(cmd)
+        
 
         if error_code:
             logging.error("Cache update failed with exit status %d" % error_code)
