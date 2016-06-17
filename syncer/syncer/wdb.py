@@ -139,7 +139,7 @@ class WDB(object):
                 if space.search(element):
                     element = "'%s'" % (element.replace("'", "\\'"),)
                 new_command.append(element)
-            return ["ssh", "{0}@{1}".format(self.user, self.host), '"' + ' '.join(new_command) + '"']
+            return ["ssh", "{0}@{1}".format(self.user, self.host), ' '.join(new_command)]
         else:
             return cmd
 
