@@ -167,8 +167,9 @@ class WDB(object):
 
     def _run_sql(self, sql):
         cmd = self.create_ssh_command(['psql', 'wdb', '-U', self.user])
+        logging.debug(' '.join(cmd))
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-        stdout, stderr = process.communicate(sql)
+        stdout, stderr = process.communicate(bytes(sql, 'utf8'))
         exit_code = process.returncode
         return exit_code, stderr, stdout
 
@@ -179,6 +180,7 @@ class WDB(object):
         logging.info("Updating WDB cache for %s" % datainstance.data_provider())
 
         sql = self._create_cache_model_sql_command(datainstance)
+        logging.debug(sql)
         error_code, stderr, stdout = self._run_sql(sql)
 
         if error_code:
