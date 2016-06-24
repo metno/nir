@@ -10,7 +10,6 @@ setup(
     install_requires=[
         "lxml==3.6.0",
         "productstatus-client==6.0.3",
-        "statsd==3.2.1",
-        "psycopg2==2.6.1"
+        "statsd==3.2.1"
     ],
 )
