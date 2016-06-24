@@ -89,7 +89,6 @@ class WDB(object):
         cmd: A command represented by a list of arguments.
         Returns three values: exit_code(int), stderr(string) and stdout(string).
         """
-        logging.debug("Executing: %s" % ' '.join(cmd))
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         stdout, stderr = process.communicate()
