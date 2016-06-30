@@ -98,6 +98,8 @@ def exec_load(args):
         api = _get_api(args)
         pi = api.productinstance[args.product_instance_id]
         print('%s = %s' % (args.product_instance_id, pi))
+        if args.product_instance_id != pi.id:
+            raise productstatus.exceptions.ProductstatusException('Invalid product instance id: ' + args.product_instance_id)
         database = args.config.get('syncer', 'state_database_file')
         state_database = syncer.persistence.StateDatabase(database, create_if_missing=False)
         state_database.add_productinstance_to_be_processed(pi, force=args.force, even_if_previously_loaded=True)
