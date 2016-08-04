@@ -46,7 +46,7 @@ class Daemon(object):
         while True:
             try:
                 self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
-                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000, api_version='0.8.2')
+                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000)
                 break
             except kafka.errors.KafkaError as e:
                 if e.retriable:
