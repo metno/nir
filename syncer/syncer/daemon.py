@@ -1,6 +1,7 @@
 import dateutil
 import logging
 import time
+import uuid
 import configparser
 import productstatus.exceptions
 import productstatus.api
@@ -18,8 +19,8 @@ class Daemon(object):
     '''
     def __init__(self, config):
         try:
-            base_url = config.get('productstatus', 'url')
-            verify_ssl = bool(int(config.get('productstatus', 'verify_ssl')))
+            self._base_url = config.get('productstatus', 'url')
+            self._verify_ssl = bool(int(config.get('productstatus', 'verify_ssl')))
 
             model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
             self.models = set()
@@ -41,12 +42,16 @@ class Daemon(object):
         except configparser.Error as e:
             raise syncer.exceptions.ConfigurationException(e)
 
-        logging.info('Connecting to %s' % (base_url))
+        self.group_id = 'syncer_' + str(uuid.uuid4())
+        self._reset_kafka_connection()
 
+    def _reset_kafka_connection(self):
+        logging.info('Connecting to %s' % (self._base_url))
         while True:
             try:
-                self.api = productstatus.api.Api(base_url, verify_ssl=verify_ssl)
-                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000)
+                self.api = productstatus.api.Api(self._base_url, verify_ssl=self._verify_ssl)
+                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000, 
+                                                                          group_id=self.group_id)
                 break
             except kafka.errors.KafkaError as e:
                 if e.retriable:
@@ -85,13 +90,21 @@ class Daemon(object):
         logging.info('Exiting daemon loop')
 
     def _listen_for_new_events(self):
-        try:
-            event = self.productstatus_listener.get_next_event()
-            self._incoming_event(event)
-            self.productstatus_listener.save_position()
-            return event
-        except productstatus.exceptions.EventTimeoutException:
-            return None
+        while True:
+            try:
+                event = self.productstatus_listener.get_next_event()
+                self._incoming_event(event)
+                self.productstatus_listener.save_position()
+                return event
+            except productstatus.exceptions.EventTimeoutException:
+                return None
+            except kafka.errors.CommitFailedError as e:
+                logging.warn('Error when contacting kafka: "%s". Resetting connection.' % e)
+                self._reset_kafka_connection()
+            except kafka.errors.KafkaError as e:
+                if not e.retriable:
+                    raise
+                logging.warn('Error when contacting kafka: "%s". Retrying...' % e)
 
     def _dataformat_for_model(self, model):
         models = {'/usr/lib/wdb/netcdfLoad': 'netcdf',
