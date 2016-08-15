@@ -94,7 +94,6 @@ class Daemon(object):
             try:
                 event = self.productstatus_listener.get_next_event()
                 self._incoming_event(event)
-                self.productstatus_listener.save_position()
                 return event
             except productstatus.exceptions.EventTimeoutException:
                 return None
