@@ -9,7 +9,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "lxml==3.6.1",
-        "productstatus-client==6.0.7",
+        "productstatus-client==6.1.1",
         "statsd==3.2.1"
     ],
 )
