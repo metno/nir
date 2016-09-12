@@ -8,8 +8,8 @@ setup(
     scripts=['bin/syncer', 'bin/syncerctl'],
     packages=find_packages(),
     install_requires=[
-        "lxml==3.6.0",
-        "productstatus-client==6.0.4",
+        "lxml==3.6.1",
+        "productstatus-client==6.0.7",
         "statsd==3.2.1"
     ],
 )
