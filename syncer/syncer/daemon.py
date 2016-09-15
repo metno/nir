@@ -10,7 +10,12 @@ import syncer.exceptions
 import syncer.persistence
 import syncer.reporting
 import kafka.errors
-from datetime import datetime
+from datetime import datetime, timedelta
+
+
+def unserialize_datetime(timestamp):
+    s = productstatus.utils.SerializeBase()
+    return s._unserialize_datetime(timestamp)
 
 
 class Daemon(object):
@@ -150,16 +155,30 @@ class Daemon(object):
                 logging.debug('Already processed')
                 self._state_database.done(productinstance)
 
+    def _process_resource_event(self, event):
+        if event['resource'] == 'datainstance':
+            datainstance = self._get_datainstance(event)
+            for model in self._get_models_for(datainstance):
+                logging.debug('Relevant event for %s: %s' % (model, str(event)))
+                productinstance = datainstance.data.productinstance
+                self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, productinstance)
+                self._state_database.add_productinstance_to_be_processed(productinstance)
+                
+    def _process_heartbeat_event(self, event):
+        this_heartbeat = unserialize_datetime(event['message_timestamp'])
+        if hasattr(self, 'last_heartbeat'):
+            if (this_heartbeat - self.last_heartbeat) > timedelta(minutes=2):
+                logging.warn('More than 2 minutes between productstatus internal heartbeats (%s - %s)' % (this_heartbeat, self.last_heartbeat))
+        self.last_heartbeat = this_heartbeat
+
     def _incoming_event(self, event):
         '''Process an event coming from productstatus kafka queue'''
         try:
-            if event['resource'] == 'datainstance':
-                datainstance = self._get_datainstance(event)
-                for model in self._get_models_for(datainstance):
-                    logging.debug('Relevant event for %s: %s' % (model, str(event)))
-                    productinstance = datainstance.data.productinstance
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, productinstance)
-                    self._state_database.add_productinstance_to_be_processed(productinstance)
+            event_type = event['type']
+            if event_type == 'resource':
+                self._process_resource_event(event)
+            elif event_type == 'heartbeat':
+                self._process_heartbeat_event(event)
         except KeyError:
             logging.warn('Did not understand event from kafka: ' + str(event))
 
@@ -220,8 +239,7 @@ class Daemon(object):
     def _get_datainstance(self, event):
         # Ensure that all events are at least two seconds old
         timestamp = event['message_timestamp']
-        s = productstatus.utils.SerializeBase()
-        creation_time = s._unserialize_datetime(timestamp)
+        creation_time = unserialize_datetime(timestamp)
         event_age = (datetime.now(tz=dateutil.tz.tzutc()) - creation_time).total_seconds()
         target_event_age = 2.5
         if event_age < target_event_age:
