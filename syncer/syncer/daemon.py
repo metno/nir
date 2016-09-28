@@ -84,6 +84,9 @@ class Daemon(object):
                 self._add_latest_events_from_server()
                 logging.info('Got and sorted all relevant old events')
                 while True:
+                    if hasattr(self, 'pause_processing') and self.pause_processing:
+                        time.sleep(10)
+                        self.pause_processing = False
                     self._process_pending_productinstances()
                     self._listen_for_new_events()
             except productstatus.exceptions.ServiceUnavailableException:
@@ -233,6 +236,7 @@ class Daemon(object):
                 except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
                     self.reporter.incr('load failed', 1)
                     logging.error('Error when loading data: ' + str(e))
+                    self.pause_processing = True
             elif not complete:
                 logging.debug('Not complete')
 
