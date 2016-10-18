@@ -12,6 +12,11 @@ class RESTException(Exception):
     pass
 
 
+class MissingKafkaHeartbeat(Exception):
+    """Thrown when we haven't received a heartbeat message from kafka in a long time."""
+    pass
+
+
 class RESTServiceClientErrorException(RESTException):
     """Thrown when the server returns a 4xx error."""
     pass

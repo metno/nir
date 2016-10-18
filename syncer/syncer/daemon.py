@@ -27,6 +27,8 @@ class Daemon(object):
             self._base_url = config.get('productstatus', 'url')
             self._verify_ssl = bool(int(config.get('productstatus', 'verify_ssl')))
 
+            self.max_heartbeat_delay = int(config.get('productstatus', 'max_heartbeat_delay', 0))
+
             model_keys = set([model.strip() for model in config.get('syncer', 'models').split(',')])
             self.models = set()
             for key in model_keys:
@@ -55,7 +57,7 @@ class Daemon(object):
         while True:
             try:
                 self.api = productstatus.api.Api(self._base_url, verify_ssl=self._verify_ssl)
-                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000, 
+                self.productstatus_listener = self.api.get_event_listener(consumer_timeout_ms=10000,
                                                                           group_id=self.group_id)
                 break
             except kafka.errors.KafkaError as e:
@@ -104,6 +106,7 @@ class Daemon(object):
                 self._incoming_event(event)
                 return event
             except productstatus.exceptions.EventTimeoutException:
+                self._check_heartbeat_status()
                 return None
             except kafka.errors.CommitFailedError as e:
                 logging.warn('Error when contacting kafka: "%s". Resetting connection.' % e)
@@ -166,13 +169,27 @@ class Daemon(object):
                 productinstance = datainstance.data.productinstance
                 self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, productinstance)
                 self._state_database.add_productinstance_to_be_processed(productinstance)
-                
+
     def _process_heartbeat_event(self, event):
+        """
+        Register timestamp of last kafka heartbeat message received.
+        Log warning if heartbeat is stale.
+        """
         this_heartbeat = unserialize_datetime(event['message_timestamp'])
         if hasattr(self, 'last_heartbeat'):
             if (this_heartbeat - self.last_heartbeat) > timedelta(minutes=2):
                 logging.warn('More than 2 minutes between productstatus internal heartbeats (%s - %s)' % (this_heartbeat, self.last_heartbeat))
         self.last_heartbeat = this_heartbeat
+
+    def _check_heartbeat_status(self):
+        """Exit if we have stopped receiving kafka heartbeat messages."""
+
+        now = datetime.utcnow().replace(tzinfo=dateutil.tz.tzutc())
+        if (hasattr(self, 'last_heartbeat') and self.max_heartbeat_delay > 0):
+
+            if (now - self.last_heartbeat) > timedelta(minutes=self.max_heartbeat_delay):
+                logging.error("No kafka heartbeat messages received for at least %s minutes. Exiting syncer." % self.max_heartbeat_delay)
+                raise syncer.exceptions.MissingKafkaHeartbeat()
 
     def _incoming_event(self, event):
         '''Process an event coming from productstatus kafka queue'''

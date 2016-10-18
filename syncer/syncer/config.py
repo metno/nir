@@ -74,7 +74,17 @@ class Configuration(object):
     def parse_args(self, args):
         self.args = self.argument_parser.parse_args(args)
 
-    def get(self, section, key):
+    def get(self, section, key, default=None):
+        """
+        Return config value if it exists. If no config key is found,
+        return specified default or raise exception.
+        """
+        if default is not None:
+            try:
+                return self.config_parser.get(section, key)
+            except configparser.NoOptionError:
+                return default
+
         return self.config_parser.get(section, key)
 
     def section_keys(self, section_name):
