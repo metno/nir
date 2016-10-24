@@ -7,7 +7,8 @@ import configparser
 
 import syncer.config
 import syncer.exceptions
-import syncer.daemon
+import syncer.loading
+import syncer.productstatus_access
 import syncer.wdb
 import syncer.wdb2ts
 
@@ -19,9 +20,23 @@ DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
 
 def run(config):
     try:
-        daemon = syncer.daemon.Daemon(config)
+        loader = syncer.loading.DataLoader(config)
+        listener = syncer.productstatus_access.Listener(config)
+
+        loader.populate_database_with_latest_events_from_server()
+
+        listener.start()
         logging.info("Syncer is started")
-        daemon.run()
+        try:
+            while True:
+                loader.process()
+                listener.new_data.clear()
+                listener.new_data.wait()
+        except KeyboardInterrupt:
+            listener.stop()
+
+        logging.info('Syncer is stopping')
+        listener.join()
     except syncer.exceptions.ConfigurationException as e:
         logging.critical(str(e))
         return syncer.config.EXIT_CONFIG

@@ -52,7 +52,6 @@ class WDB(object):
 
         logging.info("Loading file %s" % datainstance.url())
 
-
         load_cmd = self.create_load_command(datainstance)
         cmd = self.create_ssh_command(load_cmd)
         logging.debug(' '.join(cmd))
