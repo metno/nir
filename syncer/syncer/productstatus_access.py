@@ -61,6 +61,8 @@ class Listener(threading.Thread, syncer._util.SyncerBase):
         self._threaded_init()
 
         logging.debug('Awaiting events')
+        self._listen_for_new_events()
+        self.new_data.set()  # May be used to detect that we have started listening.
         while not self.stopping:
             try:
                 self._listen_for_new_events()

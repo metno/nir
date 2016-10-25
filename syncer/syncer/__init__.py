@@ -23,14 +23,16 @@ def run(config):
         loader = syncer.loading.DataLoader(config)
         listener = syncer.productstatus_access.Listener(config)
 
+        listener.start()
+        listener.new_data.wait()  # Ensure that we have started before proceeding.
+
         loader.populate_database_with_latest_events_from_server()
 
-        listener.start()
         logging.info("Syncer is started")
         try:
             while True:
-                loader.process()
                 listener.new_data.clear()
+                loader.process()
                 listener.new_data.wait()
         except KeyboardInterrupt:
             listener.stop()
