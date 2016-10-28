@@ -57,6 +57,8 @@ class DataLoader(syncer._util.SyncerBase):
             for idx in range(min(2, count)):
                 pi = productinstances[idx]
                 try:
+                    # BUG: complete is buggy - it should be something like pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]['file_count']
+                    # Will not fix yet until we are sure that also productstatus data is ok
                     complete = pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]
                 except KeyError:
                     complete = False  # no completeness information available means not complete
@@ -81,6 +83,7 @@ class DataLoader(syncer._util.SyncerBase):
         elif not models:
             logging.info('No data available for %s (yet)' % (productinstance.resource_uri))
         for model, datainstances in models.items():
+            # complete is buggy - see aove 
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
                 try:
