@@ -33,7 +33,7 @@ def run(config):
             while True:
                 listener.new_data.clear()
                 loader.process()
-                listener.new_data.wait()
+                listener.new_data.wait(10)
         except KeyboardInterrupt:
             listener.stop()
 

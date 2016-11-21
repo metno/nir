@@ -29,9 +29,6 @@ class DataLoader(syncer._util.SyncerBase):
 
     def process(self):
         pending = self._state_database.pending_productinstances()
-        if not pending:
-            logging.debug('Nothing pending')
-        logging.debug(pending)
         for productinstance_id, force in list(pending.items()):
             productinstance = self.api.productinstance[productinstance_id]
             logging.debug('Pending: %s. Force=%s' % (productinstance.resource_uri, force))
@@ -83,7 +80,7 @@ class DataLoader(syncer._util.SyncerBase):
         elif not models:
             logging.info('No data available for %s (yet)' % (productinstance.resource_uri))
         for model, datainstances in models.items():
-            # complete is buggy - see aove 
+            # complete is buggy - see above
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
                 try:
