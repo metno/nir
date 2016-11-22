@@ -47,33 +47,36 @@ class WDB(object):
         self.host = host
         self.user = user
 
-    def load_model_file(self, datainstance):
+    def load_model_file(self, datainstance, model):
         """Load a modelfile into wdb."""
 
-        logging.info("Loading file %s" % datainstance.url())
-
-        load_cmd = self.create_load_command(datainstance)
-        cmd = self.create_ssh_command(load_cmd)
-        logging.debug(' '.join(cmd))
         try:
-            exit_code, stderr, stdout = WDB.execute_command(cmd)
-        except TypeError as e:
-            raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
+            logging.info("Loading file %s" % datainstance.url)
 
-        if exit_code != EXIT_SUCCESS:
-            if exit_code == EXIT_FIELDS or exit_code == EXIT_LOAD:
-                logging.error("Failed to load some fields into WDB. This is likely due to duplicate field errors, i.e. loading the same data twice.")
-                logging.warn("STDERR output from WDB suppressed because exit code equals %d" % exit_code)
-            else:
-                lines = self.get_std_lines(stderr)
-                if lines:
-                    logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
-                    for line in lines:
-                        logging.warning("WDB load error: " + str(line))
+            load_cmd = self.create_load_command(datainstance._datainstance, datainstance.model)
+            cmd = self.create_ssh_command(load_cmd)
+            logging.debug(' '.join(cmd))
+            try:
+                exit_code, stderr, stdout = WDB.execute_command(cmd)
+            except TypeError as e:
+                raise syncer.exceptions.WDBLoadFailed("WDB load failed due to malformed command %s" % e)
 
-                raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
+            if exit_code != EXIT_SUCCESS:
+                if exit_code == EXIT_FIELDS or exit_code == EXIT_LOAD:
+                    logging.error("Failed to load some fields into WDB. This is likely due to duplicate field errors, i.e. loading the same data twice.")
+                    logging.warn("STDERR output from WDB suppressed because exit code equals %d" % exit_code)
+                else:
+                    lines = self.get_std_lines(stderr)
+                    if lines:
+                        logging.warning("WDB load failed with exit code %d, STDERR output follows" % exit_code)
+                        for line in lines:
+                            logging.warning("WDB load error: " + str(line))
 
-        logging.info("Loading completed.")
+                    raise syncer.exceptions.WDBLoadFailed("WDB load failed with exit code %d" % exit_code)
+
+            logging.info("Loading completed.")
+        except AttributeError as e:
+            raise syncer.exceptions.InvalidResourceException(str(e))
 
     def get_std_lines(self, std):
         """
@@ -105,8 +108,8 @@ class WDB(object):
         else:
             return url  # ...and hope for the best!
 
-    def create_load_command(self, datainstance):
-        load_command = [datainstance.model.load_program,
+    def create_load_command(self, datainstance, model):
+        load_command = [model.load_program,
                         '--loadPlaceDefinition',
                         '--dataprovider', datainstance.data_provider()]
 
@@ -114,15 +117,16 @@ class WDB(object):
             load_command.append('--user')
             load_command.append(self.user)
 
-        if datainstance.version():
+        version = datainstance.data.productinstance.version
+        if version:
             load_command.append('--dataversion')
-            load_command.append(str(datainstance.version()))
+            load_command.append(str(version))
 
-        if hasattr(datainstance.model, 'load_config'):
+        if hasattr(model, 'load_config'):
             load_command.append('--configuration')
-            load_command.append(datainstance.model.load_config)
+            load_command.append(model.load_config)
 
-        load_command.append(WDB.clean_url(datainstance.url()))
+        load_command.append(WDB.clean_url(datainstance.url))
         return load_command
 
     def should_use_ssh(self):
@@ -140,7 +144,7 @@ class WDB(object):
         else:
             return cmd
 
-    def create_cache_query(self, datainstance):
+    def create_cache_query(self, productinstance, model):
         """
         Generate a SQL/WCI query that caches a specific model run.
         """
@@ -150,16 +154,16 @@ class WDB(object):
         # making it extremely unlikely that any malicious code could run here.
         return "SELECT wci.begin('%(user)s'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
             'user': self.user,
-            'data_provider': datainstance.data_provider(),
-            'reference_time': datainstance.reference_time()
+            'data_provider': model.data_provider(),
+            'reference_time': productinstance.reference_time
         }
 
     @staticmethod
     def create_analyze_query():
         return 'ANALYZE'
 
-    def _create_cache_model_sql_command(self, datainstance):
-        cache_query = self.create_cache_query(datainstance)
+    def _create_cache_model_sql_command(self, productinstance, model):
+        cache_query = self.create_cache_query(productinstance, model)
         analyze_query = WDB.create_analyze_query()
         return cache_query + '; ' + analyze_query
 
@@ -171,13 +175,13 @@ class WDB(object):
         exit_code = process.returncode
         return exit_code, stderr, stdout
 
-    def cache_model_run(self, datainstance):
+    def cache_model_run(self, productinstance, model):
         """
         Run cacheQuery and ANALYZE against the WDB server for the specified model run.
         """
-        logging.info("Updating WDB cache for %s" % datainstance.data_provider())
+        logging.info("Updating WDB cache for %s" % model.data_provider)
 
-        sql = self._create_cache_model_sql_command(datainstance)
+        sql = self._create_cache_model_sql_command(productinstance, model)
         logging.debug(sql)
         error_code, stderr, stdout = self._run_sql(sql)
 

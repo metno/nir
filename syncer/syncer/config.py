@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 import configparser
+import copy
 
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
@@ -23,7 +24,6 @@ class ModelConfig(object):
 
         section_name = 'model_%s' % (model_name,)
 
-        data = {}
         mandatory_options = ['product', 'servicebackend', 'data_provider', 'load_program', 'model_run_age_warning']
 
         section_keys = config.section_keys(section_name)
@@ -31,11 +31,12 @@ class ModelConfig(object):
             if option not in section_keys:
                 raise configparser.NoOptionError(option, section_name)
 
-        data = config.section_options(section_name)
+        data = copy.copy(config.section_options(section_name))
 
         for param in ['model_run_age_warning', 'model_run_age_critical']:
             if param in data:
                 data[param] = int(data[param])
+        data['servicebackend'] = [s.strip() for s in data['servicebackend'].split(',')]
 
         data['model'] = model_name
 

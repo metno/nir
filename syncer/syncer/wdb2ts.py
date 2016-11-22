@@ -73,7 +73,7 @@ class WDB2TS(object):
 
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
-    def update(self, datainstance):
+    def update(self, productinstance):
         try:
             self.load_status()
         except syncer.exceptions.WDB2TSMissingContentException as e:
@@ -81,7 +81,7 @@ class WDB2TS(object):
         except syncer.exceptions.WDB2TSServerException as e:
             logging.error("Can not fetch WDB2TS status information: %s", str(e))
         else:
-            self.update_wdb2ts(datainstance)
+            self.update_wdb2ts(productinstance)
             logging.info('wdb2ts updated')
 
     def load_status(self):
@@ -119,22 +119,22 @@ class WDB2TS(object):
 
         return [e.text for e in provider_elements]
 
-    def update_wdb2ts(self, datainstance):
+    def update_wdb2ts(self, productinstance, model):
         """
         Update all relevant wdb2ts services for the specified model and model_run
         """
-        data_provider = datainstance.data_provider()
+        data_provider = model.data_provider
 
         for service in self.status:
             if data_provider in self.status[service]['data_providers']:
-                self.update_wdb2ts_service(service, datainstance)
+                self.update_wdb2ts_service(service, productinstance, data_provider)
 
-    def update_wdb2ts_service(self, service, datainstance):
+    def update_wdb2ts_service(self, service, productinstance, data_provider):
         """
         Update a wdb2ts service for a given model and model_run
         """
         try:
-            update_url = self.get_update_url(service, datainstance.data_provider(), datainstance.reference_time(), datainstance.version())
+            update_url = self.get_update_url(service, data_provider, productinstance.reference_time, productinstance.version)
             logging.info('Update URL: ' + update_url)
         except TypeError as e:
             raise syncer.exceptions.WDB2TSClientUpdateFailure("Could not generate a correct update URL for WDB2TS: %s" % e)

@@ -1,0 +1,53 @@
+---
+
+productstatus:
+  format:
+    - id: format1
+      modified: 2016-04-18T10:55:57.555Z
+      resource_uri: /format1
+      name: Format_1
+      slug: format-1
+  servicebackend:
+   -  id: servicebackend1
+      name: Service Backend 1
+      slug: servicebackend1
+      resource_uri: /servicebackend1
+   -  id: servicebackend2
+      name: Service Backend 2
+      slug: servicebackend2
+      resource_uri: /servicebackend2
+  product:
+    - id: product1
+      resource_uri: /product1
+      slug: product1
+      name: Product 1
+      file_count: 1
+      operational: true
+      productinstance:
+        - id: productinstance1
+          resource_uri: /productinstance1
+          reference_time: 2016-03-15T00:00:00Z
+          version: 1
+          data:
+            - id: data1
+              resource_uri: /data1
+              time_period_begin: 2016-03-15T18:00:00Z
+              time_period_end: 2016-03-15T18:00:00Z
+              datainstance:
+                - id: datainstance1
+                  deleted: false
+                  expires: null
+                  format: format1
+                  object_version: 1
+                  resource_uri: /datainstance1
+                  servicebackend: servicebackend1
+                  url: file:////1/file
+                - id: datainstance2
+                  deleted: false
+                  expires: null
+                  format: format1
+                  object_version: 1
+                  resource_uri: /datainstance2
+                  servicebackend: servicebackend2
+                  url: file:////2/file
+...
