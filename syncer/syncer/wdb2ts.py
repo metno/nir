@@ -73,7 +73,7 @@ class WDB2TS(object):
 
         raise exc("WDB2TS returned error code %d for request URI %s" % (response.status_code, response.request.url))
 
-    def update(self, productinstance):
+    def update(self, productinstance, model):
         try:
             self.load_status()
         except syncer.exceptions.WDB2TSMissingContentException as e:
@@ -81,7 +81,7 @@ class WDB2TS(object):
         except syncer.exceptions.WDB2TSServerException as e:
             logging.error("Can not fetch WDB2TS status information: %s", str(e))
         else:
-            self.update_wdb2ts(productinstance)
+            self.update_wdb2ts(productinstance, model)
             logging.info('wdb2ts updated')
 
     def load_status(self):

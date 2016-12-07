@@ -48,22 +48,13 @@ class DataLoader(syncer._util.SyncerBase):
             productinstances = self.api.productinstance.objects
             productinstances.filter(product=product)
             productinstances.order_by('-reference_time')
-            productinstances.limit(2)  # two in case the latest is not yet complete
+            productinstances.limit(1)
             count = productinstances.count()
-            if not count:
+            if count:
+                pi = productinstances[0]
+                self._state_database.add_productinstance_to_be_processed(pi)
+            else:
                 logging.info('Product <%s> has no instance yet' % (product.slug))
-            for idx in range(min(2, count)):
-                pi = productinstances[idx]
-                try:
-                    # BUG: complete is buggy - it should be something like pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]['file_count']
-                    # Will not fix yet until we are sure that also productstatus data is ok
-                    complete = pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]
-                except KeyError:
-                    complete = False  # no completeness information available means not complete
-                if complete:
-                    self._state_database.add_productinstance_to_be_processed(pi)
-                else:
-                    logging.debug('Skipping %s on startup, since it seems to have no useable datainstance yet' % (pi.resource_uri,))
 
     def _process_productinstance(self, productinstance, force):
         models = self._get_datainstances(productinstance)

@@ -53,7 +53,7 @@ class WDB(object):
         try:
             logging.info("Loading file %s" % datainstance.url)
 
-            load_cmd = self.create_load_command(datainstance._datainstance, datainstance.model)
+            load_cmd = self.create_load_command(datainstance, model)
             cmd = self.create_ssh_command(load_cmd)
             logging.debug(' '.join(cmd))
             try:
@@ -111,7 +111,7 @@ class WDB(object):
     def create_load_command(self, datainstance, model):
         load_command = [model.load_program,
                         '--loadPlaceDefinition',
-                        '--dataprovider', datainstance.data_provider()]
+                        '--dataprovider', model.data_provider]
 
         if self.user:
             load_command.append('--user')
@@ -154,7 +154,7 @@ class WDB(object):
         # making it extremely unlikely that any malicious code could run here.
         return "SELECT wci.begin('%(user)s'); SELECT wci.cacheQuery(array['%(data_provider)s'], NULL, 'exact %(reference_time)s', NULL, NULL, NULL, array[-1])" % {
             'user': self.user,
-            'data_provider': model.data_provider(),
+            'data_provider': model.data_provider,
             'reference_time': productinstance.reference_time
         }
 
@@ -180,7 +180,6 @@ class WDB(object):
         Run cacheQuery and ANALYZE against the WDB server for the specified model run.
         """
         logging.info("Updating WDB cache for %s" % model.data_provider)
-
         sql = self._create_cache_model_sql_command(productinstance, model)
         logging.debug(sql)
         error_code, stderr, stdout = self._run_sql(sql)
