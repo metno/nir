@@ -102,7 +102,7 @@ class StateDatabase(object):
                 if pid not in ret:
                     ret[pid] = force
                 elif force:
-                    ret[ret[pid]] = True
+                    ret[pid] = True
         return ret
 
     def add_productinstance_to_be_processed(self, productinstance, force=False, even_if_previously_loaded=False):
