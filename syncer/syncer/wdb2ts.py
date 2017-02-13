@@ -147,7 +147,24 @@ class WDB2TS(object):
         """
         s = productstatus.utils.SerializeBase()
         reftime_str = s._serialize_datetime(reference_time)
-        return "%s/%supdate?%s=%s,%d" % (self.base_url, service, data_provider, reftime_str, version)
+
+        # If service has the form name/version, split name and version, 
+        # so we can create a {name}update/{version} string
+        atomized_service = service.split('/', 1)
+        service = atomized_service[0]
+        if len(atomized_service) > 1:
+            api_version = '/' + atomized_service[1]
+        else:
+            api_version = ''
+
+        base_return = '{base_url}/{service}update{api_version}?{data_provider}={reftime},{version}'
+
+        return base_return.format(base_url=self.base_url,
+                                  service=service,
+                                  api_version=api_version,
+                                  data_provider=data_provider,
+                                  reftime=reftime_str,
+                                  version=version)
 
     def request_update(self, update_url):
         """
