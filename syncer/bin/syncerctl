@@ -4,6 +4,8 @@ import os
 import json
 import sys
 import argparse
+import urllib.request
+import urllib.error
 import productstatus.api
 import productstatus.exceptions
 import configparser
@@ -111,6 +113,29 @@ def exec_load(args):
     except productstatus.exceptions.ProductstatusException as e:
         print('Error when contacting productstatus service:', str(e))
         return syncer.config.EXIT_CONNECT_PRODUCTSTATUS
+    
+def exec_update(args):
+    base_url = args.config.get('wdb2ts', 'base_url')
+    for s in [service.strip() for service in args.config.get('wdb2ts', 'services').split(',')]:
+        
+        atomized_service = s.split('/', 1)
+        s = atomized_service[0]
+        if len(atomized_service) > 1:
+            api_version = '/' + atomized_service[1]
+        else:
+            api_version = ''
+        
+        full_url = '%s/%supdate%s' % (base_url, s, api_version)
+        try:
+            status = urllib.request.urlopen(full_url)
+            if status.getcode() != '200':
+                print(s + ':\t updated')
+            else:
+                print(s + ':\tERROR: ' + str(status.read()))
+        except urllib.error.HTTPError as e:
+            print(s + ' \t(' + full_url + '): ' + str(e))
+    return syncer.config.EXIT_SUCCESS
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -132,8 +157,11 @@ if __name__ == '__main__':
     load.add_argument('--force', action='store_true', help='Ignore sanity checks')
     load.set_defaults(func=exec_load)
     
+    update = sub.add_parser('update', help = 'Send update requests to wdb2ts.')
+    update.set_defaults(func=exec_update)
+    
     # common options for status checks
-    for class_ in (check, status, load):
+    for class_ in (check, status, load, update):
         class_.add_argument('-c', '--config', type=str, help='Read productstatus config from the given file', default=syncer.config.DEFAULT_CONFIG_PATH)
 
     
