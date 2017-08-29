@@ -21,24 +21,23 @@ DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
 def run(config):
     try:
         loader = syncer.loading.DataLoader(config)
-        listener = syncer.productstatus_access.Listener(config)
+        with syncer.productstatus_access.Listener(config) as listener:
+            listener.start()
+            listener.new_data.wait()  # Ensure that we have started before proceeding.
 
-        listener.start()
-        listener.new_data.wait()  # Ensure that we have started before proceeding.
+            loader.populate_database_with_latest_events_from_server()
 
-        loader.populate_database_with_latest_events_from_server()
+            logging.info("Syncer is started")
+            try:
+                while True:
+                    listener.new_data.clear()
+                    loader.process()
+                    listener.new_data.wait(10)
+            except KeyboardInterrupt:
+                listener.stop()
 
-        logging.info("Syncer is started")
-        try:
-            while True:
-                listener.new_data.clear()
-                loader.process()
-                listener.new_data.wait(10)
-        except KeyboardInterrupt:
-            listener.stop()
-
-        logging.info('Syncer is stopping')
-        listener.join()
+            logging.info('Syncer is stopping')
+            listener.join()
     except syncer.exceptions.ConfigurationException as e:
         logging.critical(str(e))
         return syncer.config.EXIT_CONFIG

@@ -29,6 +29,12 @@ class Listener(threading.Thread, syncer._util.SyncerBase):
         except configparser.Error as e:
             raise syncer.exceptions.ConfigurationException(e)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.stop()
+
     def stop(self):
         self.stopping = True
         self.new_data.set()
