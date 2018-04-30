@@ -22,6 +22,7 @@ def run(config):
     try:
         loader = syncer.loading.DataLoader(config)
         listener = syncer.productstatus_access.Listener(config)
+        listener.daemon = True
 
         listener.start()
         listener.new_data.wait()  # Ensure that we have started before proceeding.
@@ -34,6 +35,8 @@ def run(config):
                 listener.new_data.clear()
                 loader.process()
                 listener.new_data.wait(10)
+                if not listener.is_alive():
+                    raise Exception('Listening thread seems to be dead. Exiting main loop.')
         except KeyboardInterrupt:
             listener.stop()
 
