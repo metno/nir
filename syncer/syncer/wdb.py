@@ -89,11 +89,13 @@ class WDB(object):
         Returns three values: exit_code(int), stderr(string) and stdout(string).
         """
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        stdout, stderr = process.communicate()
-        exit_code = process.returncode
-
-        return exit_code, stderr, stdout
+        try:
+            stdout, stderr = process.communicate(timeout=1200)
+            exit_code = process.returncode
+            return exit_code, stderr, stdout
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return (1, 'timeout', '')
 
     @staticmethod
     def clean_url(url):
