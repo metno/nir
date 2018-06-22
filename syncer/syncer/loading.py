@@ -9,11 +9,11 @@ import syncer.persistence
 class DataLoader(syncer._util.SyncerBase):
     '''Loads data into wdb and wdb2ts'''
 
-    def __init__(self, config):
+    def __init__(self, config, models):
         syncer._util.SyncerBase.__init__(self, config)
         try:
             self.api = self.get_productstatus_api()
-            self.models = self.get_model_setup()
+            self.models = models
             self._state_database = self.get_state_database_connection()
             self.reporter = self.get_reporter(self._state_database)
 
@@ -43,7 +43,7 @@ class DataLoader(syncer._util.SyncerBase):
         '''Find the latest events from server, and add them to the processing queue.'''
         # Note that a product instance may not have associated datainstances when it is discovered here.
         for m in self.models:
-            product = self.api.product[m.product]
+            product = self.api.product[m.product()]
             productinstances = self.api.productinstance.objects
             productinstances.filter(product=product)
             productinstances.order_by('-reference_time')
@@ -54,9 +54,10 @@ class DataLoader(syncer._util.SyncerBase):
             for idx in range(min(2, count)):
                 pi = productinstances[idx]
                 try:
+                    servicebackend =  m.servicebackend()
                     # BUG: complete is buggy - it should be something like pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]['file_count']
                     # Will not fix yet until we are sure that also productstatus data is ok
-                    complete = pi.complete[self.api.servicebackend[m.servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]
+                    complete = pi.complete[self.api.servicebackend[servicebackend].resource_uri][self.api.dataformat['netcdf'].resource_uri]
                 except KeyError:
                     complete = False  # no completeness information available means not complete
                 if complete:
@@ -68,8 +69,9 @@ class DataLoader(syncer._util.SyncerBase):
         models = {}
         for datainstance in self.api.datainstance.objects.filter(data__productinstance=productinstance):
             for m in self.models:
-                if m.product in (productinstance.product.slug, productinstance.product.id):
-                    if m.servicebackend in (datainstance.servicebackend.slug, datainstance.servicebackend.id):
+                servicebackend =  m.servicebackend()
+                if m.product() in (productinstance.product.slug, productinstance.product.id):
+                    if servicebackend in (datainstance.servicebackend.slug, datainstance.servicebackend.id):
                         if m in models:
                             models[m].append(datainstance)
                         else:
@@ -89,21 +91,22 @@ class DataLoader(syncer._util.SyncerBase):
                     for instance in datainstances:
                         di = DataInstance(instance, model)
                         self.wdb.load_model_file(di)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance)
                     reporter.report('wdb load')
                     self.wdb.cache_model_run(di)
                     reporter.report('wdb cache')
                     self.wdb2ts.update(di)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance)
                     reporter.report('wdb2ts update')
                     self._state_database.set_loaded(productinstance.id)
                     self._state_database.done(productinstance)
                     reporter.report_total('productinstance time to complete')
                     self.reporter.incr('load end', 1)
-                    self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_DONE, productinstance)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_DONE, productinstance)
                 except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
                     self.reporter.incr('load failed', 1)
                     logging.error('Error when loading data: ' + str(e))
+                    model.rotate_servicebackend()
                     time.sleep(10)
             elif not complete:
                 logging.debug('Not complete')
@@ -132,7 +135,7 @@ class DataInstance(object):
         return self._verify(self._datainstance.url, 'url')
 
     def data_provider(self):
-        return self.model.data_provider
+        return self.model.data_provider()
 #        return self._verify(self._productinstance.product.wdb_data_provider, 'data provider')
 
     def reference_time(self):

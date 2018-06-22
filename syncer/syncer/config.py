@@ -2,7 +2,7 @@ import argparse
 import logging
 import sys
 import configparser
-
+import threading
 
 DEFAULT_CONFIG_PATH = '/etc/syncer.ini'
 
@@ -14,8 +14,16 @@ EXIT_CONNECT_PRODUCTSTATUS = 3
 
 class ModelConfig(object):
 
-    def __init__(self, data):
-        [setattr(self, key, value) for key, value in data.items()]
+    def __init__(self, model, product, servicebackend, data_provider, load_program, load_config, model_run_age_warning, model_run_age_critical):
+        self._model = model
+        self._product = product
+        self._servicebackend = servicebackend
+        self._data_provider = data_provider
+        self._load_program = load_program
+        self._load_config = load_config
+        self._model_run_age_warning = model_run_age_warning
+        self._model_run_age_critical = model_run_age_critical
+        self._lock = threading.Lock()
 
     @staticmethod
     def from_config_section(config, model_name):
@@ -25,7 +33,6 @@ class ModelConfig(object):
 
         data = {}
         mandatory_options = ['product', 'servicebackend', 'data_provider', 'load_program', 'model_run_age_warning']
-
         section_keys = config.section_keys(section_name)
         for option in mandatory_options:
             if option not in section_keys:
@@ -33,13 +40,63 @@ class ModelConfig(object):
 
         data = config.section_options(section_name)
 
+        product = data['product']
+        servicebackend = data['servicebackend']
+        data_provider = data['data_provider']
+        load_program = data['load_program']
+        if 'load_config' in data:
+            load_config = data['load_config']
+        else:
+            load_config = None
+        model_run_age_warning = int(data['model_run_age_warning'])
+        if 'model_run_age_critical' in data:
+            model_run_age_critical = data['model_run_age_critical']
+        else:
+            model_run_age_critical = 0
+
+
         for param in ['model_run_age_warning', 'model_run_age_critical']:
             if param in data:
                 data[param] = int(data[param])
 
         data['model'] = model_name
 
-        return ModelConfig(data)
+        return ModelConfig(model_name, product, servicebackend, data_provider, load_program, load_config, model_run_age_warning, model_run_age_critical)
+
+    def model(self):
+        return self._model
+
+    def product(self): 
+        return self._product
+
+    def servicebackend(self): 
+        self._lock.acquire()
+        ret = self._servicebackend.split(',', 1)[0]
+        self._lock.release()
+        return ret
+
+    def rotate_servicebackend(self):
+        self._lock.acquire()
+        backends = self._servicebackend.split(',', 1)
+        if len(backends) > 1:
+            logging.info('Switching to service backend ' + backends[1].split(',')[0])
+            self._servicebackend = backends[1] + ',' + backends[0]
+        self._lock.release()
+
+    def data_provider(self): 
+        return self._data_provider
+
+    def load_program(self): 
+        return self._load_program
+
+    def load_config(self): 
+        return self._load_config
+    
+    def model_run_age_warning(self):
+        return self._model_run_age_warning
+    
+    def model_run_age_critical(self):
+        return self._model_run_age_critical
 
 
 class Configuration(object):

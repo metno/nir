@@ -20,8 +20,9 @@ DEFAULT_LOG_FORMAT = '%(asctime)s (%(levelname)s) %(message)s'
 
 def run(config):
     try:
-        loader = syncer.loading.DataLoader(config)
-        listener = syncer.productstatus_access.Listener(config)
+        models = syncer._util.get_model_setup(config)
+        loader = syncer.loading.DataLoader(config, models)
+        listener = syncer.productstatus_access.Listener(config, models)
         listener.daemon = True
 
         listener.start()

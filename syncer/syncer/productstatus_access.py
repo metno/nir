@@ -15,12 +15,12 @@ class Listener(threading.Thread, syncer._util.SyncerBase):
     Listens on productstatus' kafka queue for events.
     '''
 
-    def __init__(self, config):
+    def __init__(self, config, models):
         threading.Thread.__init__(self)
         syncer._util.SyncerBase.__init__(self, config)
         try:
             self.api = self.get_productstatus_api()
-            self.models = self.get_model_setup()
+            self.models = models
             self.max_heartbeat_delay = int(config.get('productstatus', 'max_heartbeat_delay', 0))
             self.group_id = 'syncer_' + str(uuid.uuid4())
             self._reset_kafka_connection()
@@ -105,10 +105,10 @@ class Listener(threading.Thread, syncer._util.SyncerBase):
             datainstance = self._get_datainstance(event)
             got_relevant_datainstance = False
             for model in self._get_models_for(datainstance):
-                logging.debug('Relevant event for %s: %s' % (model, str(event)))
+                logging.debug('Relevant event for %s: %s' % (model.model(), str(event)))
                 got_relevant_datainstance = True
                 productinstance = datainstance.data.productinstance
-                self.reporter.report_data_event(model.model, syncer.persistence.StateDatabase.DATA_AVAILABLE, productinstance)
+                self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_AVAILABLE, productinstance)
                 self._state_database.add_productinstance_to_be_processed(productinstance)
             if got_relevant_datainstance:
                 self.new_data.set()
@@ -131,8 +131,8 @@ class Listener(threading.Thread, syncer._util.SyncerBase):
             servicebackend = datainstance.servicebackend
             product = datainstance.data.productinstance.product
             for m in self.models:
-                model_match = m.product in (product.slug, product.id)
-                backend_match = m.servicebackend in (servicebackend.slug, servicebackend.id)
+                model_match = m.product() in (product.slug, product.id)
+                backend_match = m.servicebackend() in (servicebackend.slug, servicebackend.id)
                 if model_match and backend_match:
                     ret.append(m)
         return ret

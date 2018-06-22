@@ -108,7 +108,7 @@ class WDB(object):
             return url  # ...and hope for the best!
 
     def create_load_command(self, datainstance):
-        load_command = [datainstance.model.load_program,
+        load_command = [datainstance.model.load_program(),
                         '--loadPlaceDefinition',
                         '--dataprovider', datainstance.data_provider()]
 
@@ -120,9 +120,9 @@ class WDB(object):
             load_command.append('--dataversion')
             load_command.append(str(datainstance.version()))
 
-        if hasattr(datainstance.model, 'load_config'):
+        if datainstance.model.load_config():
             load_command.append('--configuration')
-            load_command.append(datainstance.model.load_config)
+            load_command.append(datainstance.model.load_config())
 
         load_command.append(WDB.clean_url(datainstance.url()))
         return load_command
