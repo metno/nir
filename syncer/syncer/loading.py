@@ -85,33 +85,29 @@ class DataLoader(syncer._util.SyncerBase):
             # complete is buggy - see above
             complete = productinstance.complete[datainstances[0].servicebackend.resource_uri][datainstances[0].format.resource_uri]
             if force or complete:
-                for servicebackend in model.servicebackends():
-                    try:
-                        reporter = self.reporter.time_reporter()
-                        self.reporter.incr('load start', 1)
-                        for instance in datainstances:
-                            di = DataInstance(instance, model)
-                            self.wdb.load_model_file(di)
-                        self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance)
-                        reporter.report('wdb load')
-                        self.wdb.cache_model_run(di)
-                        reporter.report('wdb cache')
-                        self.wdb2ts.update(di)
-                        self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance)
-                        reporter.report('wdb2ts update')
-                        self._state_database.set_loaded(productinstance.id)
-                        self._state_database.done(productinstance)
-                        reporter.report_total('productinstance time to complete')
-                        self.reporter.incr('load end', 1)
-                        self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_DONE, productinstance)
-                        return
-                    except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
-                        self.reporter.incr('backend failed', 1)
-                        logging.error('Error when loading data from backend: ' + str(e))
-                        model.rotate_servicebackend()
-                self.reporter.incr('load failed', 1)
-                logging.error('Unable to load data from any backend')
-                time.sleep(10)
+                try:
+                    reporter = self.reporter.time_reporter()
+                    self.reporter.incr('load start', 1)
+                    for instance in datainstances:
+                        di = DataInstance(instance, model)
+                        self.wdb.load_model_file(di)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB_OK, productinstance)
+                    reporter.report('wdb load')
+                    self.wdb.cache_model_run(di)
+                    reporter.report('wdb cache')
+                    self.wdb2ts.update(di)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_WDB2TS_OK, productinstance)
+                    reporter.report('wdb2ts update')
+                    self._state_database.set_loaded(productinstance.id)
+                    self._state_database.done(productinstance)
+                    reporter.report_total('productinstance time to complete')
+                    self.reporter.incr('load end', 1)
+                    self.reporter.report_data_event(model.model(), syncer.persistence.StateDatabase.DATA_DONE, productinstance)
+                except (syncer.exceptions.WDBLoadFailed, syncer.exceptions.WDBCacheFailed, syncer.exceptions.WDB2TSException) as e:
+                    self.reporter.incr('load failed', 1)
+                    logging.error('Error when loading data: ' + str(e))
+                    model.rotate_servicebackend()
+                    time.sleep(10)
             elif not complete:
                 logging.debug('Not complete')
 
