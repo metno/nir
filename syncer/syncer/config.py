@@ -75,6 +75,12 @@ class ModelConfig(object):
         self._lock.release()
         return ret
 
+    def servicebackends(self):
+        self._lock.acquire()
+        ret = self._servicebackend.split(',')
+        self._lock.release()
+        return ret
+
     def rotate_servicebackend(self):
         self._lock.acquire()
         backends = self._servicebackend.split(',', 1)
