@@ -1,5 +1,10 @@
-NIR
-===
+NIR - Deprecated and not maintained anymore
+===========================================
+
+NIR is not in use by MET Norway and we have stopped supporting this software.
+The repository is archived for reference.
+Please notice that dependencies and code is outdated, and that you must expect that the current state is that this repository has bugs and depends on library versions with known security weaknesses.
+
 
 ## Abstract
 
